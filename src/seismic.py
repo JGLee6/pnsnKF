@@ -6,26 +6,26 @@ Created on Tue Mar 15 14:54:51 2016
 """
 
 import numpy as np
-#from obspy.core import UTCDateTime
-import obspy.clients.fdsn as fdsn
+import obspy.clients.fdsn as fdsn  # seismic network
 import datetime as dt
 import matplotlib.pyplot as plt
 import scipy.signal as sig
 import pykalman as pyk
 
+# Need to open a client to talk to database
 client = fdsn.Client()
+# Need to give start and end times to query from database
 t1 = dt.datetime.now()
 t2 = t1-dt.timedelta(seconds = 400)
 
+# This gives a list of seismometer stations around some latlong in Seattle
 #Used http://www.latlong.net/ to find lat, long of cenpa circle room
-
 report = client.get_stations(t2,t1,network='UW',level='response',
                              latitude=47.6603,longitude = -122.3031,
                              maxradius = .05)
 
 
 # Attempt at getting all waveforms from all of the stations in some radius:
-
 channels = report.get_contents()['channels']
 bulk = [channel.split('.') for channel in channels]
 for item in bulk:
