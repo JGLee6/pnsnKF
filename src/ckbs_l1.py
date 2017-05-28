@@ -8,7 +8,36 @@ Created on Sun May  7 16:22:55 2017
 import numpy as np
 import scipy.linalg as la
 
-def ckbs_l1_affine(z,g,h,dg,dh,qinv,rinv,maxIter=10,epsilon=1e-2):
+def ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=10,epsilon=1e-2):
+    """
+    Inputs
+    ------
+    z : ndarray
+        N x m array of observed state variable (time series). N observations of 
+        m dimensional data.
+    g : ndarray
+        N x n array of affine transition map translation between hidden states.
+        N instances of additive component to affine transition from n 
+        dimensional hidden state data.
+    h : ndarray
+        N x m array of observation affine map translation from hidden state to 
+        observed state. Dependence of observed state on hidden state.
+    G : ndarray
+        N x n x n array of transition matrices of hidden state. N instances of 
+        transition matrix from n dimensional hidden state data.
+    H : ndarray
+        N x m x n observation affine map from hidden state to observed state. 
+        N instances of transition matrix from n dimensional hidden state data.
+    qinv : ndarray
+        n x n Inverse covariance matrix of L2 observed state loss.
+    rinv : ndarray
+        m x m Inverse covariance matrix of L1 hidden state loss.
+    maxIter : int, optional
+        Maximum number of iterations in smoother (iterate on Gauss-Newton to 
+        find direction of gradient and then perform line search)
+    epsilon : float, optional
+        Convergence parameter
+    """
     info = []
     # Size of problem
     n = np.shape(g)[-1]
@@ -19,9 +48,9 @@ def ckbs_l1_affine(z,g,h,dg,dh,qinv,rinv,maxIter=10,epsilon=1e-2):
     
     # update D and A to not include measurements
     # compute tridiagonal elements of smoothing program
-    D,A = process_hess(dg, qinv)
+    D,A = process_hess(G, qinv)
     # Compute gradient of loss wrt hidden state
-    c = process_grad(xZero, g, dg, qinv)
+    c = process_grad(xZero, g, G, qinv)
     
     # Runs block-tridiagonal solver to find smoothed value
     y = tridiag_solve_b(D, A, -c)
@@ -43,7 +72,7 @@ def ckbs_l1_affine(z,g,h,dg,dh,qinv,rinv,maxIter=10,epsilon=1e-2):
     
     for k in range(N):
         crinv[k] = np.sqrt(rinv[k])
-        B[k] = np.dot(-crinv[k],dh[k])
+        B[k] = np.dot(-crinv[k],H[k])
         b[k] = np.dot(crinv[k], (z[k]-h[k]))
         # Version 1
         temp = b[k] + np.dot(B[k],y[k])
@@ -125,8 +154,8 @@ def ckbs_l1_affine(z,g,h,dg,dh,qinv,rinv,maxIter=10,epsilon=1e-2):
         pPos = pPosNew
         pNeg = pNegNew
         # Compute the loss after the update and compare to inital state loss
-        VP = l2l1_obj(y, z, g, h, dg, dh, qinv, rinv)
-        Kxnu = l2l1_obj(xZero, z, g, h, dg, dh, qinv, rinv)
+        VP = l2l1_obj(y, z, g, h, G, H, qinv, rinv)
+        Kxnu = l2l1_obj(xZero, z, g, h, G, H, qinv, rinv)
         G1 = np.sum(r*pPos) + np.sum(s*pNeg)
         converge = (G1 < np.min([Kxnu - VP, epsilon]))
         # Every third step is a corrector (That is update the mu parameter)
