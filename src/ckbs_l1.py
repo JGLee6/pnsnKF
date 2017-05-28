@@ -53,10 +53,12 @@ def ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=10,epsilon=1e-2):
     c = process_grad(xZero, g, G, qinv)
     
     # Runs block-tridiagonal solver to find smoothed value
+    # Gets Gauss-Newton step in linearization of observed state variable
     y = tridiag_solve_b(D, A, -c)
     # block-tridiagonal multiplication with D as diaogonals, A as off-diags and
     # y as vector
     cRec = blktridiag_mul(D, A, y)
+    # Double checks that y is the solution to block-tridiag matrix(D,A)y = c
     if np.linalg.norm(-c-cRec,ord=np.inf) > 1e-5:
         print 'tridiagonal solver failed'
         #return c, cRec
@@ -251,7 +253,7 @@ def process_hess(G, Qinv):
 
 
 def process_grad(x, g, G, Qinv):
-    """
+    r"""
     Computes gradient of loss function (just hidden variable term)
     
     .. math::
@@ -300,20 +302,20 @@ def l2l1_obj(x, z, g, h, G, H, Qinv, Rinv):
     
     """
     N,n = np.shape(x)
-    chQ = np.linalg.cholesky(Qinv[0])
+    #chQ = np.linalg.cholesky(Qinv[0])
     chR = np.linalg.cholesky(Rinv[0])
     zRes = z[0] - h[0] - np.dot(H[0],x[0])
     xRes = x[0] - g[0]
-    loss = np.sqrt(2)*np.linalg.norm(np.dot(chQ,zRes),1)
-    loss += .5*np.linalg.norm(np.dot(chR,xRes),2)**2.
+    loss = np.sqrt(2)*np.linalg.norm(np.dot(chR,zRes),1)
+    loss += .5*np.dot(xRes.T,np.dot(Qinv[0],xRes)) #np.linalg.norm(np.dot(chQ,xRes),2)**2.
     for k in xrange(1,N):
-        chQ = np.linalg.cholesky(Qinv[k])
+        #chQ = np.linalg.cholesky(Qinv[k])
         chR = np.linalg.cholesky(Rinv[k])
         zRes = z[k] - h[k] - np.dot(H[k],x[k])
         xRes = x[k] - g[k]
         xRes = x[k] - g[k] - np.dot(G[k],x[k-1])
-        loss += np.sqrt(2)*np.linalg.norm(np.dot(chQ,zRes),1)
-        loss += .5*np.linalg.norm(np.dot(chR,xRes),2)**2.
+        loss += np.sqrt(2)*np.linalg.norm(np.dot(chR,zRes),1)
+        loss += .5*np.dot(xRes.T,np.dot(Qinv[k],xRes)) #np.linalg.norm(np.dot(chQ,xRes),2)**2.
     
     return loss                            
 
