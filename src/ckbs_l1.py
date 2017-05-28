@@ -336,6 +336,12 @@ def newton_step_l1(mu,s,y,r,b,d,BDia,HDia,HLow,pPos,pNeg):
     
 def tridiag_solve_b(C, A, r):
     """
+    Solves block-tridiagonal system of equations, where C are the diagonal 
+    matrix elements, A and A^{T} are the above and below diagonal elements 
+    respectively, and r is the vector of observations.
+    
+    References
+    ----------
     Algorithm 2.1 from https://arxiv.org/pdf/1303.1993.pdf
     """
     N,n = np.shape(C)[:-1]

@@ -34,8 +34,8 @@ class SeismicReader(object):
         #print(channels)
         bulk = [channel.split('.') for channel in channels]
         for item in bulk:
-            item.append(t1)
             item.append(t2)
+            item.append(t1)
         #
         # print(bulk)
         #
@@ -50,7 +50,7 @@ class SeismicReader(object):
                                            channel=item[3],level='response')
             self.ARMA.append(self.get_pzg(inv))
             
-    def get_pzg(self):
+    def get_pzg(self, inventory):
         """
         Takes output of zero,pole query as string. Splits into appropriate 
         roots and then converts to coefficients of a polynomial.
@@ -62,7 +62,7 @@ class SeismicReader(object):
         MA : ndarray
             List of MA coefficients normalized so first AR coefficient is 1.
         """
-        _,zeros,poles,K = re.split('ZEROS|POLES|CONSTANT',self.report.reponse.get_sacpz())
+        _,zeros,poles,K = re.split('ZEROS|POLES|CONSTANT',inventory[0][0][0].response.get_sacpz())
         zeros = zeros.split()
         # first value is number of zeros, get roots as complex floats
         nZ = int(zeros[0])
@@ -104,13 +104,13 @@ class SeismicReader(object):
         
         return AR, MA
     
-    def matrices(self):
+    def matrices(self,indx):
         """
         Calls get_pzg to find ARMA coefficients and then defines the transition 
         matrix of the hidden state, the selection matrix of the hidden state, 
         and the transition matrix of the observed state.
         """
-        AR,MA = self.get_pzg()
+        AR,MA = self.ARMA[indx]
         r = len(AR)
         H = np.zeros(r)
         H[0] = 1.0
