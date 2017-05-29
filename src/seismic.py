@@ -40,11 +40,13 @@ class SeismicReader(object):
         # print(bulk)
         #
         self.waveForms = []
+        self.guess = []
         self.ARMA = []
         for k, item in enumerate(bulk):
             if k > 2:
                 break
             self.waveForms.append(np.copy(self.client.get_waveforms(*item)[0]))
+            self.guess.append(np.copy(self.client.get_waveforms(*item).remove_response(self.inventory)[0]))
             inv = self.client.get_stations(t2,t1,network=item[0],
                                            station=item[1],location=item[2],
                                            channel=item[3],level='response')

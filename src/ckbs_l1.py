@@ -38,6 +38,18 @@ def ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=10,epsilon=1e-2):
     epsilon : float, optional
         Convergence parameter
     """
+    # Hard-coded variables
+    # duality-gap
+    mu = 100
+    # How close to boundary are we willing to go in one step
+    gamma = .01
+    # Number of iterations of ?? (line search?)
+    maxKount = 18
+    # line search rejection criterion?
+    beta = .5
+    # corrector period, how many iterations before updating duality gap parameter
+    cT = 3
+    
     info = []
     # Size of problem
     n = np.shape(g)[-1]
@@ -63,7 +75,7 @@ def ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=10,epsilon=1e-2):
         print 'tridiagonal solver failed'
         #return c, cRec
     
-    y = np.reshape(y, (N,n))
+    # Initiallize constraint variables and linearization of h(y)~h(x) + H*(x-y)
     b = np.zeros([N,m])
     r = np.zeros([N,m])
     s = np.zeros([N,m])
@@ -83,16 +95,11 @@ def ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=10,epsilon=1e-2):
         pNeg[k] = 500 + max(0, -temp)
         r[k] = np.sqrt(2)*np.ones([1,m])
         s[k] = np.sqrt(2)*np.ones([1,m])
-        
-    # Duality gap value
-    mu = 100
     
     # These should have been constructed to be zero
     #if (np.min(s) < 0 or np.min(r) <= 0 or np.min(pPos) <= 0 or np.min(pNeg) <= 0):
     #    print 'L1_affine: initial s, r, pPlus, pMinus not all positive'
     #    return
-    # How close to boundary are we willing to go in one step
-    gamma = .01
     # determine the value of y that solves the problem
     converge = False
     itr = 0
@@ -102,14 +109,9 @@ def ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=10,epsilon=1e-2):
         F = kuhn_tucker_l1(mu, s, y, r, b, c, B, D, A, pPos, pNeg)
         # Computes newton descent step
         dpPos, dpNeg, dr, ds, dy = newton_step_l1(mu,s,y,r,b,c,B,D,A,pPos,pNeg)
-        # "SHOULD BE 0!!!"
-        expr1 = np.linalg.norm(pNeg*s + s*dpNeg + pNeg*ds - mu, ord = np.inf)
-        expr2 = np.linalg.norm(pPos*r + r*dpPos + pPos*dr - mu, ord = np.inf)
-        if (np.abs(expr1)>1e-4):
-            print 'L1_affine: Newton Solver not working, expr1 not 0'
-        elif (np.abs(expr2) > 1e-4):
-            print 'L1_affine: Newton Solver not working, expr2 not 0'
-            #return expr1, expr2
+        # Check that expressions involving updates of slack variables sum to 0
+        check_newton_l1(pNeg,dpNeg,s,ds,mu,1)
+        check_newton_l1(pPos,dpPos,r,dr,mu,2)
         # determine maximum allowable step factor lambda
         ratio = np.array([dr, ds, dpPos, dpNeg])/ np.array([r, s, pPos, pNeg])
         ratioMax = np.max(-ratio)
@@ -124,15 +126,12 @@ def ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=10,epsilon=1e-2):
         # Line Search
         ok = False
         kount = 0
-        maxKount = 18
-        # line search rejection criterion
-        beta = .5
         lmbd = lmbd/beta
         while (not ok) and (kount < maxKount):
             kount += 1
             lmbd *= beta
             
-            # step size of lmbd
+            # update parameters with step size of lmbd
             sNew = s + lmbd*ds
             yNew = y + lmbd*dy
             rNew = r + lmbd*dr
@@ -146,13 +145,13 @@ def ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=10,epsilon=1e-2):
             # Compute the KKT conditions at the new values of y,p+,p-,s,r
             FNew = kuhn_tucker_l1(mu, sNew, yNew, rNew, b, c, B, D, A, pPosNew, pNegNew)
             FMax = np.max(np.abs(F),0)
-            FNewMax = np.max(np.abs(FNew))
+            FNewMax = np.max(np.abs(FNew),0)
             # Check that all of the variables have decreased
             # XXX: I believe we want all, not any
             ok = all(FNewMax <= (1-gamma*lmbd)*FMax)
         if not ok:
-            df = np.max(F-FNew)
-            if df<= epsilon:
+            df = np.max(F-FNew,0)
+            if all(df<= epsilon):
                 print 'L1_affine: line search failed'
                 #return
         
@@ -162,12 +161,12 @@ def ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=10,epsilon=1e-2):
         pPos = pPosNew
         pNeg = pNegNew
         # Compute the loss after the update and compare to inital state loss
-        VP = l2l1_obj(y, z, g, h, G, H, qinv, rinv)
+        VP   = l2l1_obj(y, z, g, h, G, H, qinv, rinv)
         Kxnu = l2l1_obj(xZero, z, g, h, G, H, qinv, rinv)
         G1 = np.sum(r*pPos) + np.sum(s*pNeg)
         converge = (G1 < np.min([Kxnu - VP, epsilon]))
         # Every third step is a corrector (That is update the mu parameter)
-        if (itr%3 == 0):
+        if (itr%cT == 0):
             temp = np.sum(r*pPos) + np.sum(s*pNeg)
             compMuFrac = temp/(2.*m*N)
             mu = .1*compMuFrac
@@ -175,6 +174,18 @@ def ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=10,epsilon=1e-2):
         
     return y, r, s, pPos, pNeg, info
 
+
+def check_newton_l1(p, dp, s, ds, mu, num):
+    """
+    Checks update step from Newton step for constraint on expression involving 
+    slack variables to sum to zero. The variable 'num' just allows one to track 
+    which expression fails.
+    """
+    expr = np.linalg.norm(p*s + s*dp + p*ds - mu, ord = np.inf)
+    if (np.abs(expr)>1e-4):
+        print 'L1_affine: Newton Solver not working, expr',num,' not 0'
+    return
+    
 
 def blktridiag_mul(A, B, v):
     r"""
@@ -366,7 +377,7 @@ def newton_step_l1(mu,s,y,r,b,d,BDia,HDia,HLow,pPos,pNeg):
     tinvis = r/(rpN+spP)
     
     # Create a new array for modified diagonal blocs
-    modCDiag = np.array([HDia[k]+np.dot(BDia[k].T,np.dot(np.diag(tinv[k]),BDia[k])) for k in range(N)])
+    modCDiag = np.array([HDia[k]+np.dot(BDia[k].T,np.dot(np.diag(tinv[k]),BDia[k])) for k in xrange(N)])
         
     # Compute D(pPos) and D(pNeg)
     
@@ -434,11 +445,11 @@ def cho_solver(A, B):
 N = 30
 x = np.reshape(np.random.randn(N),(N,1))
 G = np.array([[[0]] for k in xrange(N)])
-H = np.array([[[1]] for k in xrange(N)])
+H = np.array([[[2]] for k in xrange(N)])
 z = np.array([np.dot(H[k],x[k])+np.random.randn(1) for k in xrange(N)])
 g = np.array([[0] for k in xrange(N)])
 h = np.copy(g)
 qinv = np.array([[[1]] for k in xrange(N)])
 rinv = np.copy(qinv)
-ckbs_l1_affine(z,g,h,G,H,qinv,rinv)
+y,r,s,pPos,pNeg,info = ckbs.ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=18,epsilon=1e-5)
 """
