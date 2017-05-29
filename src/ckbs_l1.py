@@ -72,8 +72,8 @@ def ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=10,epsilon=1e-2):
     pPos = np.zeros([N,m])     # max(0, b + By)
     pNeg = np.zeros([N,m])    # max(0,-b + By)
     
-    for k in range(N):
-        crinv[k] = np.sqrt(rinv[k])
+    for k in xrange(N):
+        crinv[k] = np.linalg.cholesky(rinv[k])  # prev.: crinv[k] = np.sqrt(rinv[k])
         B[k] = np.dot(-crinv[k],H[k])
         b[k] = np.dot(crinv[k], (z[k]-h[k]))
         # Version 1
@@ -83,6 +83,8 @@ def ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=10,epsilon=1e-2):
         pNeg[k] = 500 + max(0, -temp)
         r[k] = np.sqrt(2)*np.ones([1,m])
         s[k] = np.sqrt(2)*np.ones([1,m])
+        
+    # Duality gap value
     mu = 100
     
     # These should have been constructed to be zero
@@ -101,7 +103,7 @@ def ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=10,epsilon=1e-2):
         # Computes newton descent step
         dpPos, dpNeg, dr, ds, dy = newton_step_l1(mu,s,y,r,b,c,B,D,A,pPos,pNeg)
         # "SHOULD BE 0!!!"
-        expr1 = np.linalg.norm(pPos*s + s*dpNeg + pNeg*ds - mu, ord = np.inf)
+        expr1 = np.linalg.norm(pNeg*s + s*dpNeg + pNeg*ds - mu, ord = np.inf)
         expr2 = np.linalg.norm(pPos*r + r*dpPos + pPos*dr - mu, ord = np.inf)
         if (np.abs(expr1)>1e-4):
             print 'L1_affine: Newton Solver not working, expr1 not 0'
@@ -120,9 +122,10 @@ def ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=10,epsilon=1e-2):
             lmbd = .99*np.min([maxNeg, 1])
             
         # Line Search
-        ok = 0
+        ok = False
         kount = 0
         maxKount = 18
+        # line search rejection criterion
         beta = .5
         lmbd = lmbd/beta
         while (not ok) and (kount < maxKount):
@@ -140,10 +143,13 @@ def ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=10,epsilon=1e-2):
             if (np.min(sNew)<= 0) or (np.min(rNew)<=0) or (np.min(pPosNew)<=0) or (np.min(pNegNew)<=0):
                 print 'L1_affine: program error, negative entries'
                 return
+            # Compute the KKT conditions at the new values of y,p+,p-,s,r
             FNew = kuhn_tucker_l1(mu, sNew, yNew, rNew, b, c, B, D, A, pPosNew, pNegNew)
-            G = np.max(np.abs(F))
-            GNew = np.max(np.abs(FNew))
-            ok = (GNew <= (1-gamma*lmbd)*G)
+            FMax = np.max(np.abs(F),0)
+            FNewMax = np.max(np.abs(FNew))
+            # Check that all of the variables have decreased
+            # XXX: I believe we want all, not any
+            ok = all(FNewMax <= (1-gamma*lmbd)*FMax)
         if not ok:
             df = np.max(F-FNew)
             if df<= epsilon:
@@ -165,7 +171,7 @@ def ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=10,epsilon=1e-2):
             temp = np.sum(r*pPos) + np.sum(s*pNeg)
             compMuFrac = temp/(2.*m*N)
             mu = .1*compMuFrac
-        info.append([G, G1, Kxnu-VP, mu, kount])
+        info.append([FMax, G1, Kxnu-VP, mu, kount])
         
     return y, r, s, pPos, pNeg, info
 
@@ -320,18 +326,44 @@ def l2l1_obj(x, z, g, h, G, H, Qinv, Rinv):
     return loss                            
 
 
-def newton_step_l1(mu,s,y,r,b,d,BDia,HDia,HLow,pPos,pNeg): 
+def newton_step_l1(mu,s,y,r,b,d,BDia,HDia,HLow,pPos,pNeg):
+    r"""
+    Inputs
+    ------
+    mu : float
+        Duality Gap variable
+    s : float
+        Non-negativity constraint on pNeg
+    y : ndarray
+        Newton method estimate of l2 step
+    r : float
+        Non-negativity constraint on pPos
+    b : ndarray
+        Additive component on linearization of L1 loss
+    d : ndarray
+        Gradient of loss wrt y
+    BDia : ndarray
+        Derivative of linearization of L1 loss
+    HDia : ndarray
+        Diagonal element of block-tridiagonal hessian matrix of loss wrt y
+    HLow : ndarray
+        Off-diagonal elements of block-tridiagonal hessian matrix of loss wrt y
+    pPos : float
+        First slack variable for L1 portion of objective
+    pNeg : float
+        Second slack variable for L1 portion of objective
+    """
     N,n = np.shape(y)
     m = np.shape(b)[-1]
     if (np.min(s) < 0 or np.min(r) <= 0 or np.min(pPos) <= 0 or np.min(pNeg) <= 0):
         print 'L1_affine: initial s, r, pPlus, pMinus not all positive'
         return
     rs = r*s
-    rpm = r*pNeg
-    spp = s*pPos
-    tinv = rs/(rpm+spp)
-    tinvir = s/(rpm+spp)
-    tinvis = r/(rpm+spp)
+    rpN = r*pNeg
+    spP = s*pPos
+    tinv = rs/(rpN+spP)
+    tinvir = s/(rpN+spP)
+    tinvis = r/(rpN+spP)
     
     # Create a new array for modified diagonal blocs
     modCDiag = np.array([HDia[k]+np.dot(BDia[k].T,np.dot(np.diag(tinv[k]),BDia[k])) for k in range(N)])
@@ -395,3 +427,18 @@ def tridiag_solve_b(C, A, r):
 def cho_solver(A, B):
     X = la.cho_solve((np.linalg.cholesky(A),True),B)
     return X
+
+
+"""
+# Script to test with gaussian noise as x, identity as observation dependence
+N = 30
+x = np.reshape(np.random.randn(N),(N,1))
+G = np.array([[[0]] for k in xrange(N)])
+H = np.array([[[1]] for k in xrange(N)])
+z = np.array([np.dot(H[k],x[k])+np.random.randn(1) for k in xrange(N)])
+g = np.array([[0] for k in xrange(N)])
+h = np.copy(g)
+qinv = np.array([[[1]] for k in xrange(N)])
+rinv = np.copy(qinv)
+ckbs_l1_affine(z,g,h,G,H,qinv,rinv)
+"""
