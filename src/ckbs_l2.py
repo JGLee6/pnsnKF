@@ -1,8 +1,8 @@
 import numpy as np
 import scipy.linalg as la
 import pykalman as pyk
-from src import seismic as seism
-
+#from src import seismic as seism
+import seismic as seism
 
 def l2_affine(z, g, h, G, H, qinv, rinv):
     """
@@ -71,11 +71,11 @@ def l2_tridiag_observed(H, Rinv):
     rinv : ndarray
         m x m Inverse covariance matrix of L1 hidden state loss.
     """
-    N, n, m = np.shape(H)
+    N, m, n= np.shape(H)
     # diagonal block matrices
     D = np.zeros([N, n, n])
     for k in xrange(N):
-        D[k] = np.dot(H[k], np.dot(Rinv[k], H[k]).T)
+        D[k] = np.dot(H[k].T, np.dot(Rinv[k], H[k]))
 
     return D
 
@@ -111,10 +111,10 @@ def l2_grad_observed(z, h, H, Rinv):
         \frac{\partial f}{\partial x_j} =
              -H_k^TR_k^{-1}[z_k - H_k x_k-h_k]
     """
-    N, n, m = np.shape(H)
+    N, m, n = np.shape(H)
     grad = np.zeros([N, n])
     for k in xrange(N):
-        grad[k] = np.dot(H[k], np.dot(Rinv[k], z[k] - h[k]))
+        grad[k] = np.dot(H[k].T, np.dot(Rinv[k], z[k] - h[k]))
 
     return grad
 
@@ -191,7 +191,7 @@ def test_l2l2():
     G = np.array([[[0]] for k in xrange(N)])  # Create transition matrices
     H = np.array([[[2]] for k in xrange(N)])  # Create observation matrices
     # Create observations
-    z = np.array([np.dot(H[k], x[k]) + np.random.randn(1) for k in xrange(N)])
+    z = np.array([np.dot(H[k].T, x[k]) + np.random.randn(1) for k in xrange(N)])
     # Don't want translation for affine transformation, so just set to zero
     g = np.array([[0] for k in xrange(N)])
     h = np.copy(g)
