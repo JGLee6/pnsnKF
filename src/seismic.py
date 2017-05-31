@@ -23,7 +23,7 @@ class SeismicReader(object):
         :param t1: beginning timestamp for timeseries slice
         :param t2: end timestamp
         """
-        self.numSeries = 3
+        self.numSeries = 1
         self.client = fdsn.Client()  # open a client to talk to database
         # This gives a list of seismometer stations around some latlong in Seattle
         # Used http://www.latlong.net/ to find lat, long of cenpa circle room
@@ -41,22 +41,24 @@ class SeismicReader(object):
             item.append(t2)
             item.append(t1)
 
-        self.waveForms = []
-        self.guess = []
-        self.ARMA = []
+        self.waveForms = []  # array of z's in m/s^2
+        self.fs = []  #  estimate of outputs
+        self.ARMA = []  # array of AR coeff, MA coeff, and gain
 
         for k, item in enumerate(bulk):
             if k > self.numSeries - 1:
                 break
             self.waveForms.append(np.copy(self.client.get_waveforms(*item)[0]))
 
-            self.guess.append(np.copy(self.client.get_waveforms(*item).remove_response(self.inventory)[0]))
+            self.fs.append(np.copy(self.client.get_waveforms(*item).remove_response(self.inventory)[0]))
 
             inv = self.client.get_stations(t2, t1, network=item[0],
                                            station=item[1], location=item[2],
                                            channel=item[3], level='response')
 
             self.ARMA.append(self.getPoleZeroGain(inv))
+
+            self.waveForms[k] /= self.ARMA[k][-1]
 
     def getPoleZeroGain(self, inventory):
         """
@@ -99,7 +101,6 @@ class SeismicReader(object):
 
         # Scale so that coefficient on largest order pole coefficient is 1
         # and scale inputs coefficients (zeros) by gain (conversion factor)
-        MAq *= K
 
         # Because the transition matrices and covariance matrices depend on 
         # the number of AR and MA coefficients, we'll extend the outputs as 
@@ -116,7 +117,7 @@ class SeismicReader(object):
             AR = ARp
             MA = MAq
 
-        return AR, MA
+        return AR, MA, K
 
     def matrices(self, indx):
         """
