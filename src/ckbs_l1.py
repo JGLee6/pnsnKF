@@ -436,8 +436,10 @@ def tridiag_solve_b(C, A, r):
 
 
 def cho_solver(A, B):
-    X = la.cho_solve((np.linalg.cholesky(A),True),B)
-    return X
+    """
+    Solve the linear equations A x = b, given the Cholesky factorization of A.
+    """
+    return la.cho_solve((np.linalg.cholesky(A), True), B)
 
 
 """
