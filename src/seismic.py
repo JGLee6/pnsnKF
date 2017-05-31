@@ -4,6 +4,7 @@ import obspy.clients.fdsn as fdsn  # seismic network
 import datetime as dt
 import matplotlib.pyplot as plt
 import scipy.signal as sig
+import scipy.linalg as la
 import pykalman as pyk
 import re
 import numpy.polynomial.polynomial as poly
@@ -41,14 +42,29 @@ class SeismicReader(object):
             item.append(t2)
             item.append(t1)
 
-        self.waveForms = []  # array of z's in m/s^2
-        self.fs = []  #  estimate of outputs
-        self.ARMA = []  # array of AR coeff, MA coeff, and gain
+        self.zs = []  # array of z's in K* m/s^2 (counts)
+        self.fs = []  #  their estimate of outputs
+        self.ARMA = []  # array of AR coeff, MA coeff, and gain K
+        self.r = []
+        self.p = []
+        self.q = []
+        self.N = []
+        self.Sk = []
+        self.Hk = []
+        self.Gk = []
+        self.sigW = 1
+        self.sigF = 1
+        self.sigR = 1
+        self.qInvk = []
+        self.rInvk = []
+        
 
         for k, item in enumerate(bulk):
             if k > self.numSeries - 1:
                 break
-            self.waveForms.append(np.copy(self.client.get_waveforms(*item)[0]))
+            self.zs.append(np.copy(self.client.get_waveforms(*item)[0]))
+            self.N.append(len(self.zs[k]))
+            
 
             self.fs.append(np.copy(self.client.get_waveforms(*item).remove_response(self.inventory)[0]))
 
@@ -56,9 +72,20 @@ class SeismicReader(object):
                                            station=item[1], location=item[2],
                                            channel=item[3], level='response')
 
-            self.ARMA.append(self.getPoleZeroGain(inv))
-
-            self.waveForms[k] /= self.ARMA[k][-1]
+            ar,ma,K,p,q,r = self.getPoleZeroGain(inv)
+            self.ARMA.append([ar,ma,K])
+            self.p.append(p)
+            self.q.append(q)
+            self.r.append(r)
+            Hk,Gk,Sk = self.kARMA_matrices(k)
+            self.Hk.append(Hk)
+            self.Gk.append(Gk)
+            self.Sk.append(Sk)
+            qinv,rinv = self.covar_matrices(k,self.sigF,self.sigW,self.sigR)
+            self.qInvk.append(qinv)
+            self.rInvk.append(rinv)
+            
+            
 
     def getPoleZeroGain(self, inventory):
         """
@@ -94,13 +121,19 @@ class SeismicReader(object):
         K = float(K.split()[0])
 
         # Multiply out roots of polynomials to get coefficients of ARMA model
-        ARp = poly.polyfromroots(pVals)[::-1]
-        MAq = poly.polyfromroots(zVals)[::-1]
+        ARp = poly.polyfromroots(pVals)
+        MAq = poly.polyfromroots(zVals)
         p = len(ARp)
         q = len(MAq)
 
-        # Scale so that coefficient on largest order pole coefficient is 1
-        # and scale inputs coefficients (zeros) by gain (conversion factor)
+        # Divide by leading coefficient of AR process
+        # Scale input's coefficients (zeros) by gain (conversion factor)
+        ARp /= ARp[0]
+        MAq /= ARp[0]#/K
+        # We also treat AR coefficients (aside from leading) to be the negative
+        ARp[1:] *= -1
+        
+        r = np.max([p,q+1])
 
         # Because the transition matrices and covariance matrices depend on 
         # the number of AR and MA coefficients, we'll extend the outputs as 
@@ -117,26 +150,40 @@ class SeismicReader(object):
             AR = ARp
             MA = MAq
 
-        return AR, MA, K
+        return AR, MA, K, p, q, r
 
-    def matrices(self, indx):
+    def kARMA_matrices(self, indx):
         """
         Calls getPoleZeroGain to find ARMA coefficients and then defines the transition
         matrix of the hidden state, the selection matrix of the hidden state, 
         and the transition matrix of the observed state.
         """
-        AR, MA = self.ARMA[indx]
-        r = len(AR)
-        H = np.zeros(r)
-        H[0] = 1.0
+        AR, MA, K = self.ARMA[indx]
+    
+        r = self.r[indx]    
+        Hk = np.zeros(r)
+        Hk[0] = 1.0
 
-        G = np.zeros([r, r], dtype='complex')
-        G[:, 0] = AR
-        np.fill_diagonal(G[:-1, 1:], 1)
+        Gk = np.zeros([r, r], dtype='complex')
+        Gk[:, 0] = AR
+        np.fill_diagonal(Gk[:-1, 1:], 1)
 
-        R = np.copy(MA)
+        Sk = np.copy(MA)
 
-        return H, G, R
+        return Hk, Gk, Sk
+    
+    def covar_matrices(self, indx, sigF, sigW, sigR):
+        """
+        Creates covariance matrices for ARMA kalman filter model
+        """
+        Sk = self.Sk[indx]
+        Qk = np.outer(Sk,Sk)*sigF + sigW
+        Qinv = np.linalg.inv(Qk)
+        Rinv = 1./sigR
+        
+        return Qinv, Rinv
+        
+        
 
         # for data in waveForms:
         #     #wf = client.get_waveforms('UW','NOWS','','ENE',t2,t1)
@@ -161,6 +208,4 @@ if __name__ == "__main__":
     t1 = dt.datetime(2017, 05, 19, 12, 7)
     t2 = t1 - dt.timedelta(seconds=300)
     seis = SeismicReader(t1, t2)
-    print(seis.waveForms)
-    print(seis.guess)
-    print(seis.ARMA)
+    #for key, value in 
