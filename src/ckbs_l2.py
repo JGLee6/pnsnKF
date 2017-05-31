@@ -54,9 +54,7 @@ def l2_affine(z, g, h, G, H, qinv, rinv):
     gObs = l2_grad_observed(z, h, H, rinv)
     g = gHid + gObs
 
-    return diagHid, subDiagHid
-
-    # return tridiag_solve_b(diag, subDiag, g)
+    return tridiag_solve_b(diag, subDiag, g)
 
 
 def l2_tridiag_observed(H, Rinv):
