@@ -206,7 +206,7 @@ class SeismicReader(object):
 
 if __name__ == "__main__":
     # t1 = dt.datetime.now()
-    t1 = dt.datetime(2017, 05, 19, 12, 7)
-    t2 = t1 - dt.timedelta(seconds=300)
+    t1 = dt.datetime(2017, 05, 19, 23, 47)
+    t2 = t1 - dt.timedelta(seconds=1200)
     seis = SeismicReader(t1, t2)
     #for key, value in 

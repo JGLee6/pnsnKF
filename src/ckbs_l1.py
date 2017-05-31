@@ -62,14 +62,6 @@ def l2_affine(z, g, h, G, H, qinv, rinv):
     return tridiag_solve_b(diag, subDiag, g)
 
 
-def l2_tridiag(G, H, qinv, rinv):
-    """
-    Creates tridiagonal block matrix of l2-l2 system for Kalman Smoothing. It 
-    makes use of process_hess, the tridiagonal block matrix generator for l2 on 
-    the hidden state, x.
-    """
-
-
 def ckbs_l1_affine(z, g, h, G, H, qinv, rinv, maxIter=10, epsilon=1e-2):
     """
     Inputs
@@ -341,9 +333,8 @@ def l2_tridiag_observed(H, Rinv):
     N, n, m = np.shape(H)
     # diagonal block matrices
     D = np.zeros([N, n, n])
-    D[-1] = Rinv[-1]
-    for k in xrange(N - 1):
-        D[k] = np.dot(H[k].T, np.dot(Rinv[k], H[k]))
+    for k in xrange(N):
+        D[k] = np.dot(H[k], np.dot(Rinv[k], H[k]).T)
 
     return D
 
@@ -597,6 +588,34 @@ def test_l2l2():
     print 'Comparing results...'
     assert all (np.abs(y-y2[0])[1:-1] < 1e-5)
     
+    
+def back_solve(seismicReader, indx, x):
+    """    
+    """
+    r = seismicReader.r[indx]
+    q = seismicReader.q[indx]
+    p = seismicReader.p[indx]
+    phis, thetas, K = seismicReader.ARMA[indx]
+    N, n = np.shape(x)
+    f = np.zeros([N,1])
+    if (r == q+1) and (r!=p):
+        for k in xrange(N):
+            f[k] = x[k,-1]/thetas[-1]
+    elif (r == q+1) and (r == p):
+        f[0] = x[0,-1]/thetas[-1]
+        for k in xrange(1,N):
+            f[k] = (x[k,-1]-phis[-1]*x[k-1,0])/thetas[-1]
+    else:
+        d = p-q
+        # For each time step, must solve lower triangular linear system of eq
+        for k in xrange(d,N):
+            mat = np.tri(d,d,0,dtype='complex')
+            for l in xrange(d):
+                mat = np.fill_diagonal(mat[l:,:-l],phis[r-l])
+            f[k] = cho_solver(mat, x[k,-d:])/thetas[-1]
+            
+    return f
+            
     
 if __name__=="__main__":
     t1 = seism.dt.datetime(2017, 05, 19, 12, 7)
