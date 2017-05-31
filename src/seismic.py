@@ -24,7 +24,7 @@ class SeismicReader(object):
         :param t1: beginning timestamp for timeseries slice
         :param t2: end timestamp
         """
-        self.numSeries = 1
+        self.numSeries = 3
         self.client = fdsn.Client()  # open a client to talk to database
         # This gives a list of seismometer stations around some latlong in Seattle
         # Used http://www.latlong.net/ to find lat, long of cenpa circle room
@@ -104,7 +104,7 @@ class SeismicReader(object):
 
         # first value is number of zeros, get roots as complex floats
         nZ = int(zeros[0])
-        zVals = np.zeros(nZ, dtype='complex')
+        zVals = np.zeros(nZ, dtype=np.complex_)
 
         for k in range(nZ):
             zVals[k] = float(zeros[2 * k + 1]) + 1j * float(zeros[2 * k + 2])
@@ -113,7 +113,7 @@ class SeismicReader(object):
 
         # first value is number of poles, get roots as complex floats
         nP = int(poles[0])
-        pVals = np.zeros(nP, dtype='complex')
+        pVals = np.zeros(nP, dtype=np.complex_)
         for k in range(nP):
             pVals[k] = float(poles[2 * k + 1]) + 1j * float(poles[2 * k + 2])
 
@@ -129,7 +129,7 @@ class SeismicReader(object):
         # Divide by leading coefficient of AR process
         # Scale input's coefficients (zeros) by gain (conversion factor)
         ARp /= ARp[0]
-        MAq /= ARp[0]#/K
+        MAq = MAq/ARp[0]
         # We also treat AR coefficients (aside from leading) to be the negative
         ARp[1:] *= -1
         

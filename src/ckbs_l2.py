@@ -218,29 +218,30 @@ def test_l2l2():
 
 if __name__ == "__main__":
     t1 = seism.dt.datetime(2017, 05, 19, 12, 7)
-    t2 = t1 - seism.dt.timedelta(seconds=10)
+    t2 = t1 - seism.dt.timedelta(seconds=300)
     seis = seism.SeismicReader(t1, t2)
 
     # get the output from seis.
+    channel = 2
 
-    Hk = seis.Hk[0]
-    Gk = seis.Gk[0]
-    qInvk = seis.qInvk[0]
-    rInvk = seis.rInvk[0]
+    Hk = seis.Hk[channel]
+    Gk = seis.Gk[channel]
+    qInvk = seis.qInvk[channel]
+    rInvk = seis.rInvk[channel]
 
-    N = seis.N[0]
-    r = seis.r[0]
+    N = seis.N[channel]
+    r = seis.r[channel]
 
     # Start defining matrices for the time series of size N
 
-    z = np.reshape(seis.zs[0], (seis.N[0], 1))
+    z = np.reshape(seis.zs[channel], (seis.N[channel], 1))
 
-    G = np.array([np.real(seis.Gk[0]) for k in xrange(seis.N[0])])
-    H = np.array([seis.Hk[0] for k in xrange(seis.N[0])])
-    g = np.array([np.zeros(seis.r[0]) for k in xrange(seis.N[0])])
-    h = np.array([[0] for k in xrange(seis.N[0])])
-    qinv = np.array([seis.qInvk[0] for k in xrange(seis.N[0])])  # why np.real
-    rinv = np.array([seis.rInvk[0] for k in xrange(seis.N[0])])  # why np.real?
+    G = np.array([np.real(seis.Gk[channel]) for k in xrange(seis.N[channel])])
+    H = np.array([seis.Hk[channel] for k in xrange(seis.N[channel])])
+    g = np.array([np.zeros(seis.r[channel]) for k in xrange(seis.N[channel])])
+    h = np.array([[channel] for k in xrange(seis.N[channel])])
+    qinv = np.array([seis.qInvk[channel] for k in xrange(seis.N[channel])])  # why np.real
+    rinv = np.array([seis.rInvk[channel] for k in xrange(seis.N[channel])])  # why np.real?
 
     y = l2_affine(z, g, h, G, H, qinv, rinv)
 
