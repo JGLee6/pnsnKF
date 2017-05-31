@@ -163,6 +163,7 @@ class SeismicReader(object):
         r = self.r[indx]    
         Hk = np.zeros(r)
         Hk[0] = 1.0
+        Hk = np.reshape(Hk, (r,1))
 
         Gk = np.zeros([r, r], dtype='complex')
         Gk[:, 0] = AR

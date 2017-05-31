@@ -8,7 +8,7 @@ Created on Sun May  7 16:22:55 2017
 import numpy as np
 import scipy.linalg as la
 import pykalman as pyk
-import matplotlib.pyplot as plt
+import seismic as seism
 
 
 def l2_affine(z, g, h, G, H, qinv, rinv):
@@ -338,9 +338,9 @@ def l2_tridiag_observed(H, Rinv):
     rinv : ndarray
         m x m Inverse covariance matrix of L1 hidden state loss.
     """
-    N, m, n = np.shape(H)
+    N, n, m = np.shape(H)
     # diagonal block matrices
-    D = np.zeros([N, m, m])
+    D = np.zeros([N, n, n])
     D[-1] = Rinv[-1]
     for k in xrange(N - 1):
         D[k] = np.dot(H[k].T, np.dot(Rinv[k], H[k]))
@@ -376,10 +376,10 @@ def l2_grad_observed(z, h, H, Rinv):
         \frac{\partial f}{\partial x_j} =  
              -H_k^TR_k^{-1}[z_k - H_k x_k-h_k]
     """
-    N, m, n = np.shape(H)
+    N, n, m = np.shape(H)
     grad = np.zeros([N, n])
     for k in xrange(N):
-        grad[k] = np.dot(H[k].T, np.dot(Rinv[k],z[k]-h[k]))
+        grad[k] = np.dot(H[k], np.dot(Rinv[k],z[k]-h[k]))
 
     return grad
 
@@ -596,3 +596,20 @@ def test_l2l2():
     # It seems to not nail the first and last points to the same precision...
     print 'Comparing results...'
     assert all (np.abs(y-y2[0])[1:-1] < 1e-5)
+    
+    
+if __name__=="__main__":
+    t1 = seism.dt.datetime(2017, 05, 19, 12, 7)
+    t2 = t1 - seism.dt.timedelta(seconds=300)
+    seis = seism.SeismicReader(t1,t2)
+    
+    # Start defining matrices for each time
+    z = np.reshape(seis.zs[0], (seis.N[0],1))
+    G = np.array([np.real(seis.Gk[0]) for k in xrange(seis.N[0])])
+    H = np.array([seis.Hk[0] for k in xrange(seis.N[0])])
+    g = np.array([np.zeros(seis.r[0]) for k in xrange(seis.N[0])])
+    h = np.array([[0] for k in xrange(seis.N[0])])
+    qinv = np.array([np.real(seis.qInvk[0]) for k in xrange(seis.N[0])])
+    rinv = np.array([np.real(seis.rInvk[0]) for k in xrange(seis.N[0])])
+    
+    y = l2_affine(z, g, h, G, H, qinv, rinv)
