@@ -10,56 +10,12 @@ import scipy.linalg as la
 import pykalman as pyk
 import seismic as seism
 
+"""
+Conventions:
+N : length of time series
+n : range size. Expect r = max(p,q+1)
 
-def l2_affine(z, g, h, G, H, qinv, rinv):
-    """
-    Uses tri_diagonal solver to solve l2-l2 system of Kalman Smoothing.
-    
-    Inputs
-    ------
-    z : ndarray
-        N x m array of observed state variable (time series). N observations of 
-        m dimensional data.
-    g : ndarray
-        N x n array of affine transition map translation between hidden states.
-        N instances of additive component to affine transition from n 
-        dimensional hidden state data.
-    h : ndarray
-        N x m array of observation affine map translation from hidden state to 
-        observed state. Dependence of observed state on hidden state.
-    G : ndarray
-        N x n x n array of transition matrices of hidden state. N instances of 
-        transition matrix from n dimensional hidden state data.
-    H : ndarray
-        N x m x n observation affine map from hidden state to observed state. 
-        N instances of transition matrix from n dimensional hidden state data.
-    qinv : ndarray
-        n x n Inverse covariance matrix of L2 observed state loss.
-    rinv : ndarray
-        m x m Inverse covariance matrix of L1 hidden state loss.
-    """
-    # Size of problem
-    n = np.shape(g)[-1]  # should be r
-    N, m = np.shape(z)  # num time steps, dimension of observed data, expect m = 1 for us
-
-    # Create vector of zero state values
-    xZero = np.zeros([N, n])
-    
-    # compute tridiagonal elements of smoothing program
-    # Hidden state contribution (G^T Q^{-1} G)
-    diagHid, subDiagHid = l2_tridiag_hidden(G, qinv)
-    # Observed state contribution (H^T R^{-1} H)
-    diagObs = l2_tridiag_observed(H, rinv)
-    # Combine into single set of block tridiagonal matrix
-    diag = diagHid + diagObs
-    subDiag = subDiagHid
-    
-    # Compute gradient of loss wrt hidden state
-    gHid = l2_grad_hidden(xZero, g, G, qinv)
-    gObs = l2_grad_observed(z, h, H, rinv)
-    g = gHid + gObs
-    
-    return tridiag_solve_b(diag, subDiag, g)
+"""
 
 
 def ckbs_l1_affine(z, g, h, G, H, qinv, rinv, maxIter=10, epsilon=1e-2):
@@ -344,13 +300,16 @@ def l2_tridiag_hidden(G, Qinv):
     Creates block-tridiagonal 'Hessian' matrix for Kalman Smoother.
     """
     N, n = np.shape(G)[:-1]
+
     # off-diagonal block matrices (below diagonal)
     subD = np.zeros([N - 1, n, n])
+
     # diagonal block matrices
     D = np.zeros([N, n, n])
     D[-1] = Qinv[-1]
     for k in xrange(N - 1):
         D[k] = Qinv[k - 1] + np.dot(G[k].T, np.dot(Qinv[k], G[k]))
+
     subD = np.array([-np.dot(Qinv[k], G[k]) for k in xrange(N - 1)])
 
     return D, subD
@@ -555,7 +514,6 @@ def test_l2l2():
     Tests l2l2 affine solver with a random walk by comparing to pyKalman 
     smoother.
     
-    >> nosetests ckbs_l1.py
     """
     # Script to test with random walk as x, 2 x identity as observation dependence
     N = 10000  # number of time steps
@@ -617,18 +575,18 @@ def back_solve(seismicReader, indx, x):
     return f
             
     
-if __name__=="__main__":
+if __name__== "__main__":
     t1 = seism.dt.datetime(2017, 05, 19, 12, 7)
     t2 = t1 - seism.dt.timedelta(seconds=300)
-    seis = seism.SeismicReader(t1,t2)
+    seis = seism.SeismicReader(t1, t2)
     
     # Start defining matrices for each time
-    z = np.reshape(seis.zs[0], (seis.N[0],1))
+    z = np.reshape(seis.zs[0], (seis.N[0], 1))
     G = np.array([np.real(seis.Gk[0]) for k in xrange(seis.N[0])])
     H = np.array([seis.Hk[0] for k in xrange(seis.N[0])])
     g = np.array([np.zeros(seis.r[0]) for k in xrange(seis.N[0])])
     h = np.array([[0] for k in xrange(seis.N[0])])
-    qinv = np.array([np.real(seis.qInvk[0]) for k in xrange(seis.N[0])])
-    rinv = np.array([np.real(seis.rInvk[0]) for k in xrange(seis.N[0])])
+    qinv = np.array([np.real(seis.qInvk[0]) for k in xrange(seis.N[0])])  # why np.real
+    rinv = np.array([np.real(seis.rInvk[0]) for k in xrange(seis.N[0])])  # why np.real?
     
-    y = l2_affine(z, g, h, G, H, qinv, rinv)
+    y = ckbs_l1_affine(z, g, h, G, H, qinv, rinv)

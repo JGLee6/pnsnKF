@@ -133,7 +133,7 @@ class SeismicReader(object):
         # We also treat AR coefficients (aside from leading) to be the negative
         ARp[1:] *= -1
         
-        r = np.max([p,q+1])
+        r = np.max([p, q+1])
 
         # Because the transition matrices and covariance matrices depend on 
         # the number of AR and MA coefficients, we'll extend the outputs as 
@@ -169,7 +169,9 @@ class SeismicReader(object):
         Gk[:, 0] = AR
         np.fill_diagonal(Gk[:-1, 1:], 1)
 
-        Sk = np.copy(MA)
+        Sk = np.zeros(r, dtype=np.complex_)
+        Sk[0] = 1.0
+        Sk[1:] = MA[:r - 1]
 
         return Hk, Gk, Sk
     
