@@ -155,18 +155,18 @@ def tridiag_solve_b(C, A, r):
     Algorithm 2.1 from https://arxiv.org/pdf/1303.1993.pdf
     """
     N, n = np.shape(C)[:-1]
-    D = np.zeros([N, n, n])
-    s = np.zeros([N, n])
+    D = np.zeros([N, n, n], dtype=np.complex_)
+    s = np.zeros([N, n], dtype=np.complex_)
     D[0] = C[0]
     s[0] = r[0]
     for k in xrange(1, N):
         D[k] = C[k] - np.dot(A[k - 1].T, cho_solver(D[k - 1], A[k - 1]))
         s[k] = r[k] - np.dot(A[k - 1], cho_solver(D[k - 1], s[k - 1]))
 
-    e = np.zeros([N, n])
-    e[-1] = cho_solver(D[-1], s[-1])
+    e = np.zeros([N, n], dtype=np.complex_)
+    e[-1] = la.solve(D[-1], s[-1])
     for k in xrange(N - 1, 0, -1):
-        e[k] = cho_solver(D[k], (s[k] - np.dot(A[k - 1], e[k])))
+        e[k] = la.solve(D[k], (s[k] - np.dot(A[k - 1], e[k])))
 
     return e
 
@@ -213,7 +213,7 @@ def test_l2l2():
 
     # It seems to not nail the first and last points to the same precision...
     print 'Comparing results...'
-    assert all(np.abs(y - y2[0])[1:-1] < 1e-5)
+    assert all(np.abs(y - y2[0])[1:] < 1e-5)
 
 
 if __name__ == "__main__":
@@ -242,9 +242,9 @@ if __name__ == "__main__":
     qinv = np.array([seis.qInvk[0] for k in xrange(seis.N[0])])  # why np.real
     rinv = np.array([seis.rInvk[0] for k in xrange(seis.N[0])])  # why np.real?
 
-    D, sD = l2_affine(z, g, h, G, H, qinv, rinv)
+    y = l2_affine(z, g, h, G, H, qinv, rinv)
 
-    print(D)
+    #print(D)
 
-    print(sD)
+    #print(sD)
     # y = l2_affine(z, g, h, G, H, qinv, rinv)
