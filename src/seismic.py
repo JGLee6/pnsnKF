@@ -35,9 +35,9 @@ class SeismicReader(object):
                                                   maxradius=2.3)
 
         # Attempt at getting all waveforms from all of the stations in some radius:
-        channels = self.inventory.get_contents()['channels']
+        self.channels = self.inventory.get_contents()['channels']
 
-        bulk = [channel.split('.') for channel in channels]
+        bulk = [channel.split('.') for channel in self.channels]
         for item in bulk:
             item.append(t2)
             item.append(t1)

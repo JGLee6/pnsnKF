@@ -3,6 +3,7 @@ import scipy.linalg as la
 import pykalman as pyk
 #from src import seismic as seism
 import seismic as seism
+import matplotlib.pyplot as plt
 
 def l2_affine(z, g, h, G, H, qinv, rinv):
     """
@@ -91,7 +92,10 @@ def l2_tridiag_hidden(G, Qinv):
 
     # diagonal block matrices
     D = np.zeros([N, n, n], dtype=np.complex_)
-    D[-1] = Qinv[-1]
+    # This commented portion is maybe physically motivated for a process
+    # that continues with the same covariance and transition matrices, but is 
+    # not the optimal solution for the problem
+    D[-1] = Qinv[-1] # + np.dot(G[-1].T,np.dot(Qinv[-1],G[-1]))
     for k in xrange(N - 1):
         D[k] = Qinv[k - 1] + np.dot(G[k].T, np.dot(Qinv[k], G[k]))
 
@@ -178,6 +182,33 @@ def cho_solver(A, B):
     return la.cho_solve((np.linalg.cholesky(A), True), B)
 
 
+def back_solve(seismicReader, indx, x):
+    """    
+    """
+    r = seismicReader.r[indx]
+    q = seismicReader.q[indx]
+    p = seismicReader.p[indx]
+    phis, thetas, K = seismicReader.ARMA[indx]
+    N, n = np.shape(x)
+    f = np.zeros([N,1], dtype=np.complex_)
+    if (r == q+1) and (r!=p):
+        for k in xrange(N):
+            f[k] = x[k,-1]/thetas[-1]
+    elif (r == q+1) and (r == p):
+        f[0] = x[0,-1]/thetas[-1]
+        for k in xrange(1,N):
+            f[k] = (x[k,-1]-phis[-1]*x[k-1,0])/thetas[-1]
+    else:
+        d = p-q+1
+        f[0] = x[0,-d]/thetas[-d]
+        for k in xrange(1,d):
+            f[k] = (x[k,-d] - np.dot(phis[-k:],x[:k,0]))/thetas[-d]
+        for k in xrange(d,N):
+            f[k] = (x[k,-d] - np.dot(phis[-d:],x[k-d:k,0]))/thetas[-d]
+            
+    return f
+
+
 def test_l2l2():
     """
     Tests l2l2 affine solver with a random walk by comparing to pyKalman
@@ -214,36 +245,43 @@ def test_l2l2():
     # It seems to not nail the first and last points to the same precision...
     print 'Comparing results...'
     assert all(np.abs(y - y2[0])[1:] < 1e-5)
-
-
-if __name__ == "__main__":
-    t1 = seism.dt.datetime(2017, 05, 19, 12, 7)
-    t2 = t1 - seism.dt.timedelta(seconds=300)
-    seis = seism.SeismicReader(t1, t2)
-
-    # get the output from seis.
-    channel = 2
-
-    Hk = seis.Hk[channel]
-    Gk = seis.Gk[channel]
-    qInvk = seis.qInvk[channel]
-    rInvk = seis.rInvk[channel]
-
-    N = seis.N[channel]
-    r = seis.r[channel]
-
+    
+    
+def summary_plot(seis, channel):
     # Start defining matrices for the time series of size N
-
     z = np.reshape(seis.zs[channel], (seis.N[channel], 1))
 
     G = np.array([np.real(seis.Gk[channel]) for k in xrange(seis.N[channel])])
     H = np.array([seis.Hk[channel] for k in xrange(seis.N[channel])])
     g = np.array([np.zeros(seis.r[channel]) for k in xrange(seis.N[channel])])
     h = np.array([[channel] for k in xrange(seis.N[channel])])
-    qinv = np.array([seis.qInvk[channel] for k in xrange(seis.N[channel])])  # why np.real
-    rinv = np.array([seis.rInvk[channel] for k in xrange(seis.N[channel])])  # why np.real?
+    qinv = np.array([seis.qInvk[channel] for k in xrange(seis.N[channel])])
+    rinv = np.array([seis.rInvk[channel] for k in xrange(seis.N[channel])])
 
     y = l2_affine(z, g, h, G, H, qinv, rinv)
+    f = back_solve(seis, channel, y)
+    
+    fig,ax=plt.subplots(2,1,sharex=True)
+    ax[0].set_title(seis.channels[channel])
+    ax[0].plot(np.arange(len(f)),seis.zs[channel],label='observed')
+    ax[1].plot(np.arange(len(f)),seis.fs[channel],label='z-transf')
+    ax[1].plot(np.arange(len(f)),-np.real(f)/1e5,label='Kalman')
+    ax[1].set_ylim([-5e-5,5e-5])
+    ax[0].set_ylabel('seismometer output [counts]')
+    ax[1].set_xlabel('time [s]')
+    ax[1].set_ylabel(r'accel. [$m/s^2$]')
+    ax[0].legend()
+    ax[1].legend()
+
+if __name__ == "__main__":
+    t1 = seism.dt.datetime(2017, 05, 19, 12, 22)
+    t2 = t1 - seism.dt.timedelta(seconds=1200)
+    seis = seism.SeismicReader(t1, t2)
+
+    # get the plots from seis.
+    summary_plot(seis, 0)
+    summary_plot(seis, 1)
+    summary_plot(seis, 2)
 
     #print(D)
 
