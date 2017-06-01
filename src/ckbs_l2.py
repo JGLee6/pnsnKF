@@ -76,7 +76,7 @@ def l2_tridiag_observed(H, Rinv):
     # diagonal block matrices
     D = np.zeros([N, n, n])
     for k in xrange(N):
-        D[k] = np.dot(H[k].T, np.dot(Rinv[k], H[k]))
+        D[k] = np.dot(H[k].conj().T, np.dot(Rinv[k], H[k]))
 
     return D
 
@@ -97,7 +97,7 @@ def l2_tridiag_hidden(G, Qinv):
     # not the optimal solution for the problem
     D[-1] = Qinv[-1] # + np.dot(G[-1].T,np.dot(Qinv[-1],G[-1]))
     for k in xrange(N - 1):
-        D[k] = Qinv[k - 1] + np.dot(G[k].T, np.dot(Qinv[k], G[k]))
+        D[k] = Qinv[k - 1] + np.dot(G[k].conj().T, np.dot(Qinv[k], G[k]))
 
     subD = np.array([-np.dot(Qinv[k], G[k]) for k in xrange(N - 1)])
 
@@ -118,7 +118,7 @@ def l2_grad_observed(z, h, H, Rinv):
     N, m, n = np.shape(H)
     grad = np.zeros([N, n])
     for k in xrange(N):
-        grad[k] = np.dot(H[k].T, np.dot(Rinv[k], z[k] - h[k]))
+        grad[k] = np.dot(H[k].conj().T, np.dot(Rinv[k], z[k] - h[k]))
 
     return grad
 
@@ -138,12 +138,12 @@ def l2_grad_hidden(x, g, G, Qinv):
     grad = np.zeros([N, n], dtype=np.complex_)
     x01 = x[1] - g[1] - np.dot(G[1], x[0])
     xm1 = x[-1] - g[-1] - np.dot(G[-1], x[-2])
-    grad[0] = -np.dot(G[1].T, np.dot(Qinv[1], x01))
+    grad[0] = -np.dot(G[1].conj().T, np.dot(Qinv[1], x01))
     grad[-1] = np.dot(Qinv[-1], xm1)
     for k in xrange(1, N - 1):
         xk1 = x[k + 1] - g[k + 1] - np.dot(G[k + 1], x[k])
         xk = x[k] - g[k] - np.dot(G[k], x[k - 1])
-        grad[k] = np.dot(Qinv[k], xk) - np.dot(G[k + 1].T, np.dot(Qinv[k + 1], xk1))
+        grad[k] = np.dot(Qinv[k], xk) - np.dot(G[k + 1].conj().T, np.dot(Qinv[k + 1], xk1))
 
     return grad
 
@@ -272,6 +272,8 @@ def summary_plot(seis, channel):
     ax[1].set_ylabel(r'accel. [$m/s^2$]')
     ax[0].legend()
     ax[1].legend()
+    
+    return f
 
 if __name__ == "__main__":
     t1 = seism.dt.datetime(2017, 05, 19, 12, 22)
@@ -279,9 +281,9 @@ if __name__ == "__main__":
     seis = seism.SeismicReader(t1, t2)
 
     # get the plots from seis.
-    summary_plot(seis, 0)
-    summary_plot(seis, 1)
-    summary_plot(seis, 2)
+    f0 = summary_plot(seis, 0)
+    f1 = summary_plot(seis, 1)
+    f2 = summary_plot(seis, 2)
 
     #print(D)
 

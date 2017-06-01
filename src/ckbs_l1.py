@@ -104,8 +104,7 @@ def ckbs_l1_affine(z, g, h, G, H, qinv, rinv, maxIter=10, epsilon=1e-2):
     pNeg = np.zeros([N, m], dtype=np.complex_)  # max(0,-b + By)
 
     for k in xrange(N):
-        #crinv[k] = np.linalg.cholesky(rinv[k])  # prev.: crinv[k] = np.sqrt(rinv[k])
-        crinv[k] = np.sqrt(rinv[k])
+        crinv[k] = np.linalg.cholesky(rinv[k])  # prev.: crinv[k] = np.sqrt(rinv[k])
         B[k] = np.dot(-crinv[k], H[k])
         b[k] = np.dot(crinv[k], (z[k] - h[k]))
         # Version 1
@@ -126,7 +125,6 @@ def ckbs_l1_affine(z, g, h, G, H, qinv, rinv, maxIter=10, epsilon=1e-2):
     while (not converge) and (itr < maxIter):
         itr += 1
         # Computes updates for KKT conditions
-        print np.shape(B), np.shape(y)
         F = kuhn_tucker_l1(mu, s, y, r, b, c, B, diagHid, subDiagHid, pPos, pNeg)
         # Computes newton descent step
         dpPos, dpNeg, dr, ds, dy = newton_step_l1(mu, s, y, r, b, c, B, 
@@ -284,8 +282,8 @@ def kuhn_tucker_l1(mu, s, y, r, b, d, Bdia, Hdia, Hlow, pPos, pNeg):
     Bt_SmR = blkdiag_mul_t(Bdia, s - r)
     By = blkdiag_mul(Bdia, y)
 
-    print np.shape(Bt_SmR), np.shape(Hy), np.shape(d)
-    F = np.array([pPos - pNeg - b - By,
+    
+    F = np.hstack([pPos - pNeg - b - By,
                   pNeg * s - mu,
                   r + s - 2 * np.sqrt(2),
                   pPos * r - mu,
@@ -420,8 +418,8 @@ def back_solve(seismicReader, indx, x):
             
     
 if __name__== "__main__":
-    t1 = seism.dt.datetime(2017, 05, 19, 12, 7)
-    t2 = t1 - seism.dt.timedelta(seconds=300)
+    t1 = seism.dt.datetime(2017, 05, 19, 12, 22)
+    t2 = t1 - seism.dt.timedelta(seconds=1200)
     seis = seism.SeismicReader(t1, t2)
     
     # Start defining matrices for each time
@@ -434,3 +432,4 @@ if __name__== "__main__":
     rinv = np.array([np.real(seis.rInvk[0]) for k in xrange(seis.N[0])])  # why np.real?
     
     y,r,s,pPos,pNeg,info = ckbs_l1_affine(z, g, h, G, H, qinv, rinv)
+    f = back_solve(seis, 0, y)

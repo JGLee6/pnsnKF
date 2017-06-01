@@ -180,9 +180,9 @@ class SeismicReader(object):
         Creates covariance matrices for ARMA kalman filter model
         """
         Sk = self.Sk[indx]
-        Qk = np.outer(Sk,Sk)*sigF + sigW*np.eye(len(Sk))
+        Qk = np.outer(Sk,Sk.conj())*sigF + sigW*np.eye(len(Sk))
         Qinv = np.linalg.inv(Qk)
-        Rinv = 1./sigR
+        Rinv = np.reshape(1./sigR, (1,1))
         
         return Qinv, Rinv
         
