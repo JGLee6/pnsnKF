@@ -52,9 +52,9 @@ class SeismicReader(object):
         self.Sk = []
         self.Hk = []
         self.Gk = []
-        self.sigW = 1
-        self.sigF = 1
-        self.sigR = 1
+        self.sigW = []
+        self.sigF = []
+        self.sigR = []
         self.qInvk = []
         self.rInvk = []
         
@@ -72,8 +72,8 @@ class SeismicReader(object):
                                            station=item[1], location=item[2],
                                            channel=item[3], level='response')
 
-            ar,ma,K,p,q,r = self.getPoleZeroGain(inv)
-            self.ARMA.append([ar,ma,K])
+            ar,ma,K,arp0,p,q,r = self.getPoleZeroGain(inv)
+            self.ARMA.append([ar,ma,K,arp0])
             self.p.append(p)
             self.q.append(q)
             self.r.append(r)
@@ -81,7 +81,10 @@ class SeismicReader(object):
             self.Hk.append(Hk)
             self.Gk.append(Gk)
             self.Sk.append(Sk)
-            qinv,rinv = self.covar_matrices(k,self.sigF,self.sigW,self.sigR)
+            self.sigW.append(1)
+            self.sigF.append(1)
+            self.sigR.append(1)
+            qinv,rinv = self.covar_matrices(k,self.sigF[k],self.sigW[k],self.sigR[k])
             self.qInvk.append(qinv)
             self.rInvk.append(rinv)
             
@@ -128,8 +131,9 @@ class SeismicReader(object):
 
         # Divide by leading coefficient of AR process
         # Scale input's coefficients (zeros) by gain (conversion factor)
-        ARp /= ARp[0]
-        MAq = MAq/ARp[0]
+        ARp0 = ARp[0]
+        ARp /= -ARp[0]
+        MAq = -MAq/ARp[0]
         # We also treat AR coefficients (aside from leading) to be the negative
         ARp[1:] *= -1
         
@@ -150,7 +154,7 @@ class SeismicReader(object):
             AR = ARp
             MA = MAq
 
-        return AR, MA, K, p, q, r
+        return AR, MA, K, ARp0, p, q, r
 
     def kARMA_matrices(self, indx):
         """
@@ -158,7 +162,7 @@ class SeismicReader(object):
         matrix of the hidden state, the selection matrix of the hidden state, 
         and the transition matrix of the observed state.
         """
-        AR, MA, K = self.ARMA[indx]
+        AR, MA, K, AR0 = self.ARMA[indx]
     
         r = self.r[indx]    
         Hk = np.zeros(r)

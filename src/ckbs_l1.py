@@ -9,6 +9,7 @@ import numpy as np
 import pykalman as pyk
 import seismic as seism
 import ckbs_l2 as ksl2
+import matplotlib.pyplot as plt
 
 """
 Conventions:
@@ -18,7 +19,7 @@ n : range size. Expect r = max(p,q+1)
 """
 
 
-def ckbs_l1_affine(z, g, h, G, H, qinv, rinv, maxIter=10, epsilon=1e-2):
+def l1_affine(z, g, h, G, H, qinv, rinv, maxIter=10, epsilon=1e-2):
     """
     Inputs
     ------
@@ -211,7 +212,7 @@ def check_newton_l1(p, dp, s, ds, mu, num):
 def blktridiag_mul(A, B, v):
     r"""
     Multiplies block tridiagonal matrix with diagonal blocks given by A matrices,
-    and off-diagonal blocks given by B and $B^{T}$  above and below respectively.
+    and off-diagonal blocks given by B and $B^{H}$  above and below respectively.
     
     .. math::
         C \cdot v = w
@@ -251,7 +252,7 @@ def blktridiag_mul(A, B, v):
     w[0] = np.dot(A[0], v[0]) + np.dot(B[0].T, v[1])
     w[-1] = np.dot(A[-1], v[-1]) + np.dot(B[-1], v[-2])
     for k in xrange(1, N - 1):
-        w[k] = np.dot(A[k], v[k]) + np.dot(B[k].T, v[k + 1]) + np.dot(B[k - 1], v[k - 1])
+        w[k] = np.dot(A[k], v[k]) + np.dot(B[k].conj().T, v[k + 1]) + np.dot(B[k - 1], v[k - 1])
 
     return w
 
@@ -396,7 +397,7 @@ def back_solve(seismicReader, indx, x):
     r = seismicReader.r[indx]
     q = seismicReader.q[indx]
     p = seismicReader.p[indx]
-    phis, thetas, K = seismicReader.ARMA[indx]
+    phis, thetas, K, phi0 = seismicReader.ARMA[indx]
     N, n = np.shape(x)
     f = np.zeros([N,1], dtype=np.complex_)
     if (r == q+1) and (r!=p):
@@ -415,6 +416,45 @@ def back_solve(seismicReader, indx, x):
             f[k] = (x[k,-d] - np.dot(phis[-d:],x[k-d:k,0]))/thetas[-d]
             
     return f
+
+
+def smooth_seis(seis, channel):
+    # Start defining matrices for the time series of size N
+    z = np.reshape(seis.zs[channel], (seis.N[channel], 1))
+
+    G = np.array([np.real(seis.Gk[channel]) for k in xrange(seis.N[channel])])
+    H = np.array([seis.Hk[channel] for k in xrange(seis.N[channel])])
+    g = np.array([np.zeros(seis.r[channel]) for k in xrange(seis.N[channel])])
+    h = np.array([[channel] for k in xrange(seis.N[channel])])
+    qinv = np.array([seis.qInvk[channel] for k in xrange(seis.N[channel])])
+    rinv = np.array([seis.rInvk[channel] for k in xrange(seis.N[channel])])
+
+    x,r,s,pPos,pNeg,info = l1_affine(z, g, h, G, H, qinv, rinv)
+    f = back_solve(seis, 0, x)
+    f = np.reshape(f, (len(f)))
+    
+    return x, f
+    
+def summary_plot(seis, channel):
+    x, f = smooth_seis(seis, channel)
+    
+    ar,ma,k,ar0 = seis.ARMA[channel]
+    heur = [1000.,1.]
+    
+    fig,ax=plt.subplots(2,1,sharex=True)
+    ax[0].set_title(seis.channels[channel])
+    ax[0].plot(np.arange(len(f)),seis.zs[channel],label='observed')
+    ax[0].plot(np.arange(len(f)),np.real(x[:,0]*k/ar0*heur[0]),label='Kalman')
+    ax[1].plot(np.arange(len(f)),seis.fs[channel],label='z-transf')
+    ax[1].plot(np.arange(len(f)),-np.real(f)*heur[1],label='Kalman')
+    ax[1].set_ylim([-5e-5,5e-5])
+    ax[0].set_ylabel('seismometer output [counts]')
+    ax[1].set_xlabel('time [s]')
+    ax[1].set_ylabel(r'accel. [$m/s^2$]')
+    ax[0].legend()
+    ax[1].legend()
+    
+    return x,f
             
     
 if __name__== "__main__":
@@ -423,13 +463,4 @@ if __name__== "__main__":
     seis = seism.SeismicReader(t1, t2)
     
     # Start defining matrices for each time
-    z = np.reshape(seis.zs[0], (seis.N[0], 1))
-    G = np.array([np.real(seis.Gk[0]) for k in xrange(seis.N[0])])
-    H = np.array([seis.Hk[0] for k in xrange(seis.N[0])])
-    g = np.array([np.zeros(seis.r[0]) for k in xrange(seis.N[0])])
-    h = np.array([[0] for k in xrange(seis.N[0])])
-    qinv = np.array([np.real(seis.qInvk[0]) for k in xrange(seis.N[0])])  # why np.real
-    rinv = np.array([np.real(seis.rInvk[0]) for k in xrange(seis.N[0])])  # why np.real?
-    
-    y,r,s,pPos,pNeg,info = ckbs_l1_affine(z, g, h, G, H, qinv, rinv)
-    f = back_solve(seis, 0, y)
+    x,f = summary_plot(seis, 0)

@@ -151,7 +151,7 @@ def l2_grad_hidden(x, g, G, Qinv):
 def tridiag_solve_b(C, A, r):
     """
     Solves block-tridiagonal system of equations, where C are the diagonal
-    matrix elements, A and A^{T} are the above and below diagonal elements
+    matrix elements, A and A^{H} are the above and below diagonal elements
     respectively, and r is the vector of observations.
 
     References
@@ -164,8 +164,8 @@ def tridiag_solve_b(C, A, r):
     D[0] = C[0]
     s[0] = r[0]
     for k in xrange(1, N):
-        D[k] = C[k] - np.dot(A[k - 1].T, cho_solver(D[k - 1], A[k - 1]))
-        s[k] = r[k] - np.dot(A[k - 1], cho_solver(D[k - 1], s[k - 1]))
+        D[k] = C[k] - np.dot(A[k - 1].conj().T, la.solve(D[k - 1], A[k - 1]))
+        s[k] = r[k] - np.dot(A[k - 1], la.solve(D[k - 1], s[k - 1]))
 
     e = np.zeros([N, n], dtype=np.complex_)
     e[-1] = la.solve(D[-1], s[-1])
@@ -188,7 +188,7 @@ def back_solve(seismicReader, indx, x):
     r = seismicReader.r[indx]
     q = seismicReader.q[indx]
     p = seismicReader.p[indx]
-    phis, thetas, K = seismicReader.ARMA[indx]
+    phis, thetas, K, phi0 = seismicReader.ARMA[indx]
     N, n = np.shape(x)
     f = np.zeros([N,1], dtype=np.complex_)
     if (r == q+1) and (r!=p):
@@ -247,7 +247,7 @@ def test_l2l2():
     assert all(np.abs(y - y2[0])[1:] < 1e-5)
     
     
-def summary_plot(seis, channel):
+def smooth_seis(seis, channel):
     # Start defining matrices for the time series of size N
     z = np.reshape(seis.zs[channel], (seis.N[channel], 1))
 
@@ -258,14 +258,36 @@ def summary_plot(seis, channel):
     qinv = np.array([seis.qInvk[channel] for k in xrange(seis.N[channel])])
     rinv = np.array([seis.rInvk[channel] for k in xrange(seis.N[channel])])
 
-    y = l2_affine(z, g, h, G, H, qinv, rinv)
-    f = back_solve(seis, channel, y)
+    x = l2_affine(z, g, h, G, H, qinv, rinv)
+    f = back_solve(seis, channel, x)
+    f = np.reshape(f, (len(f)))
+    
+    return x, f
+
+
+def EM(seis, channel, maxIter = 5):
+    for k in xrange(maxIter):
+        x, f = smooth_seis(seis, channel)
+        seis.sigF[channel] = np.var(f)
+        seis.sigR[channel] = np.var(x[:,0])
+        seis.rInvk[channel] = np.reshape(1/seis.sigR[channel],(1,1))
+        seis.qInvk[channel] = np.linalg.inv(np.cov(x.T))
+    
+    return x, f
+    
+def summary_plot(seis, channel):
+    y, f = smooth_seis(seis, channel)
+    
+    ar,ma,k,ar0 = seis.ARMA[channel]
+    
+    heur = [20,.005]
     
     fig,ax=plt.subplots(2,1,sharex=True)
     ax[0].set_title(seis.channels[channel])
     ax[0].plot(np.arange(len(f)),seis.zs[channel],label='observed')
+    ax[0].plot(np.arange(len(f)),np.real(y[:,0]*heur[0]),label='Kalman')
     ax[1].plot(np.arange(len(f)),seis.fs[channel],label='z-transf')
-    ax[1].plot(np.arange(len(f)),-np.real(f)/1e5,label='Kalman')
+    ax[1].plot(np.arange(len(f)),-np.real(f*ar0/k*heur[1]),label='Kalman')
     ax[1].set_ylim([-5e-5,5e-5])
     ax[0].set_ylabel('seismometer output [counts]')
     ax[1].set_xlabel('time [s]')
@@ -273,17 +295,17 @@ def summary_plot(seis, channel):
     ax[0].legend()
     ax[1].legend()
     
-    return f
+    return y,f
 
 if __name__ == "__main__":
     t1 = seism.dt.datetime(2017, 05, 19, 12, 22)
-    t2 = t1 - seism.dt.timedelta(seconds=1200)
+    t2 = t1 - seism.dt.timedelta(seconds=1000)
     seis = seism.SeismicReader(t1, t2)
 
     # get the plots from seis.
-    f0 = summary_plot(seis, 0)
-    f1 = summary_plot(seis, 1)
-    f2 = summary_plot(seis, 2)
+    y0,f0 = summary_plot(seis, 0)
+    y1,f1 = summary_plot(seis, 1)
+    y2,f2 = summary_plot(seis, 2)
 
     #print(D)
 
