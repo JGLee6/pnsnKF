@@ -193,6 +193,8 @@ def l1_affine(z, g, h, G, H, qinv, rinv, maxIter=10, epsilon=1e-2):
             compMuFrac = temp / (2. * m * N)
             mu = .1 * compMuFrac
         info.append([FMax, G1, Kxnu - VP, mu, kount])
+    kktLast = kuhn_tucker_l1(0, s, y, r, b, c, B, diagHid, subDiagHid, pPos, pNeg)
+    info.append(kktLast)
 
     return y, r, s, pPos, pNeg, info
 
@@ -266,12 +268,12 @@ def blkdiag_mul(A, v):
     return w
 
 
-def blkdiag_mul_t(A, v):
+def blkdiag_mul_h(A, v):
     """
-    Block diagonal matrix multiplication with A_i^T as diagonal blocks.
+    Block diagonal matrix multiplication with A_i^H as diagonal blocks.
     """
     N = np.shape(v)[0]
-    w = np.array([np.dot(A[k].T, v[k]) for k in xrange(N)])
+    w = np.array([np.dot(A[k].conj().T, v[k]) for k in xrange(N)])
     return w
 
 
@@ -280,7 +282,7 @@ def kuhn_tucker_l1(mu, s, y, r, b, d, Bdia, Hdia, Hlow, pPos, pNeg):
     Update step for KKT solver and l1 cost on observed variable
     """
     Hy = blktridiag_mul(Hdia, Hlow, y)
-    Bt_SmR = blkdiag_mul_t(Bdia, s - r)
+    Bt_SmR = blkdiag_mul_h(Bdia, s - r)
     By = blkdiag_mul(Bdia, y)
 
     
@@ -360,27 +362,30 @@ def newton_step_l1(mu, s, y, r, b, d, BDia, HDia, HLow, pPos, pNeg):
     tinvis = r / (rpN + spP)
 
     # Create a new array for modified diagonal blocs
-    modCDiag = np.array([HDia[k] + np.dot(BDia[k].T, np.dot(np.diag(tinv[k]), BDia[k])) for k in xrange(N)])
+    modCDiag = np.array([HDia[k] + np.dot(BDia[k].conj().T, np.dot(np.diag(tinv[k]), BDia[k])) for k in xrange(N)])
 
-    # Compute D(pPos) and D(pNeg)
-
-
-    Cy = blktridiag_mul(HDia, HLow, y)
     By = blkdiag_mul(BDia, y)
+    Cy = blktridiag_mul(HDia, HLow, y)
+    constraint = b + By - pPos
+    eBar = blkdiag_mul_h(BDia, np.sqrt(2)-s) - Cy - d.conj()
+    tInvFBar = mu*(tinvir-tinvis) - tinv*constraint - tinvir*pPos*(2*np.sqrt(2)-s)
+    # Compute D(pPos) and D(pNeg)    
 
-    temp = s - np.sqrt(2) + tinv * (b + By + pPos) + mu * tinvis + tinvir * (2. * np.sqrt(2) * pPos - mu - pPos * s)
-    BTtemp = blkdiag_mul_t(BDia, temp)
+    BTtemp = blkdiag_mul_h(BDia, tInvFBar)
 
-    R5 = Cy + d + BTtemp
+    R5 = eBar + BTtemp
 
-    dy = -ksl2.tridiag_solve_b(modCDiag, HLow, R5)
+    dy = ksl2.tridiag_solve_b(modCDiag, HLow, R5)
 
-    Bypdy = blkdiag_mul(BDia, y + dy)
+    #Bypdy = blkdiag_mul(BDia, y + dy)
+    Bdy = blkdiag_mul(BDia, dy)
 
-    ds = tinv * (b + Bypdy - pPos) + tinvis * mu + tinvir * (2. * np.sqrt(2) * pPos - mu - pPos * s)
+    #ds = tinv * (b + Bypdy - pPos) + tinvis * mu + tinvir * (2. * np.sqrt(2) * pPos - mu - pPos * s)
+    ds = tinv*Bdy - tInvFBar
     dr = 2. * np.sqrt(2) - r - s - ds
     dpNeg = (mu - pNeg * ds) / s - pNeg
-    dpPos = dpNeg + Bypdy + b + pNeg - pPos
+    #dpPos = dpNeg + Bypdy + b + pNeg - pPos
+    dpPos = dpNeg + Bdy + constraint  + pNeg
 
     dpPos = np.reshape(dpPos, (N, m))
     dpNeg = np.reshape(dpNeg, (N, m))
@@ -420,7 +425,7 @@ def back_solve(seismicReader, indx, x):
 
 def smooth_seis(seis, channel):
     # Start defining matrices for the time series of size N
-    z = np.reshape(seis.zs[channel], (seis.N[channel], 1))
+    z = np.reshape(seis.zs[channel]-np.average(seis.zs[channel]), (seis.N[channel], 1))
 
     G = np.array([np.real(seis.Gk[channel]) for k in xrange(seis.N[channel])])
     H = np.array([seis.Hk[channel] for k in xrange(seis.N[channel])])
@@ -446,7 +451,8 @@ def summary_plot(seis, channel):
     ax[0].plot(np.arange(len(f)),seis.zs[channel],label='observed')
     ax[0].plot(np.arange(len(f)),np.real(x[:,0]*k/ar0*heur[0]),label='Kalman')
     ax[1].plot(np.arange(len(f)),seis.fs[channel],label='z-transf')
-    ax[1].plot(np.arange(len(f)),-np.real(f)*heur[1],label='Kalman')
+    ax[1].plot(np.arange(len(f)),-np.real(f)*heur[1],label='Kalman',alpha=.5)
+    #ax[1].plot(np.arange(len(f)),np.abs(f)*heur[1],label='abs: Kalman',alpha=.5)
     ax[1].set_ylim([-5e-5,5e-5])
     ax[0].set_ylabel('seismometer output [counts]')
     ax[1].set_xlabel('time [s]')
