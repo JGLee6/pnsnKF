@@ -53,9 +53,9 @@ def l2_affine(z, g, h, G, H, qinv, rinv):
     # Compute gradient of loss wrt hidden state
     gHid = l2_grad_hidden(xZero, g, G, qinv)
     gObs = l2_grad_observed(z, h, H, rinv)
-    g = gHid + gObs
+    rhs = gHid + gObs  # renamed from g because g was an input that is different
 
-    return tridiag_solve_b(diag, subDiag, g)
+    return diag, subDiag, rhs
 
 
 def l2_tridiag_observed(H, Rinv):
@@ -205,7 +205,9 @@ def test_l2l2():
 
     # y,r,s,pPos,pNeg,info = ckbs_l1_affine(z,g,h,G,H,qinv,rinv,maxIter=18,epsilon=1e-5)
     # Run tri-diagonal smoother (This is almost a factor 2 faster!)
-    y = l2_affine(z, g, h, G, H, qinv, rinv)
+    diag, subDiag, r = l2_affine(z, g, h, G, H, qinv, rinv)
+    y = tridiag_solve_b(diag, subDiag, g)
+    # y = l2_affine(z, g, h, G, H, qinv, rinv)
     print 'Smoothing with tri-diagonal solver'
 
     # Compare to pykalman on test case
