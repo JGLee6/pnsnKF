@@ -76,7 +76,7 @@ def l2_tridiag_observed(H, Rinv):
     # diagonal block matrices
     D = np.zeros([N, n, n])
     for k in xrange(N):
-        D[k] = np.dot(H[k].conj().T, np.dot(Rinv[k], H[k]))
+        D[k] = np.dot(H[k].conj().T, np.dot(Rinv[k], H[k]))  # aren't Hk, Rk real?
 
     return D
 
@@ -118,7 +118,8 @@ def l2_grad_observed(z, h, H, Rinv):
     N, m, n = np.shape(H)
     grad = np.zeros([N, n])
     for k in xrange(N):
-        grad[k] = np.dot(H[k].conj().T, np.dot(Rinv[k], z[k] - h[k]))
+        grad[k] = np.dot(H[k].conj().T, np.dot(Rinv[k], z[k] - h[k]))  # Hk is real? This is a bug if h[k] is non-zero?
+        np.testing.assert_array_equal(H[k].conj(), H[k])  # does not fail
 
     return grad
 
@@ -165,12 +166,15 @@ def tridiag_solve_b(C, A, r):
     s[0] = r[0]
     for k in xrange(1, N):
         D[k] = C[k] - np.dot(A[k - 1].conj().T, la.solve(D[k - 1], A[k - 1]))
-        s[k] = r[k] - np.dot(A[k - 1], la.solve(D[k - 1], s[k - 1]))
+        s[k] = r[k] - np.dot(A[k - 1].conj().T, la.solve(D[k - 1], s[k - 1]))  # added
 
     e = np.zeros([N, n], dtype=np.complex_)
     e[-1] = la.solve(D[-1], s[-1])
-    for k in xrange(N - 1, 0, -1):
-        e[k] = la.solve(D[k], (s[k] - np.dot(A[k - 1], e[k])))
+    for k in xrange(N - 2, -1, -1):
+        #  e[k] = la.solve(D[k], (s[k] - np.dot(A[k - 1], e[k])))
+        e[k] = la.solve(D[k], (s[k] - np.dot(A[k], e[k + 1])))  # Need to mentally check whether A[k] is right?
+        if k == 0:
+            print(e[0])
 
     return e
 
