@@ -182,33 +182,6 @@ def cho_solver(A, B):
     return la.cho_solve((np.linalg.cholesky(A), True), B)
 
 
-def back_solve(seismicReader, indx, x):
-    """    
-    """
-    r = seismicReader.r[indx]
-    q = seismicReader.q[indx]
-    p = seismicReader.p[indx]
-    phis, thetas, K, phi0 = seismicReader.ARMA[indx]
-    N, n = np.shape(x)
-    f = np.zeros([N,1], dtype=np.complex_)
-    if (r == q+1) and (r!=p):
-        for k in xrange(N):
-            f[k] = x[k,-1]/thetas[-1]
-    elif (r == q+1) and (r == p):
-        f[0] = x[0,-1]/thetas[-1]
-        for k in xrange(1,N):
-            f[k] = (x[k,-1]-phis[-1]*x[k-1,0])/thetas[-1]
-    else:
-        d = p-q+1
-        f[0] = x[0,-d]/thetas[-d]
-        for k in xrange(1,d):
-            f[k] = (x[k,-d] - np.dot(phis[-k:],x[:k,0]))/thetas[-d]
-        for k in xrange(d,N):
-            f[k] = (x[k,-d] - np.dot(phis[-d:],x[k-d:k,0]))/thetas[-d]
-            
-    return f
-
-
 def test_l2l2():
     """
     Tests l2l2 affine solver with a random walk by comparing to pyKalman
@@ -245,69 +218,3 @@ def test_l2l2():
     # It seems to not nail the first and last points to the same precision...
     print 'Comparing results...'
     assert all(np.abs(y - y2[0])[1:] < 1e-5)
-    
-    
-def smooth_seis(seis, channel):
-    # Start defining matrices for the time series of size N
-    z = np.reshape(seis.zs[channel], (seis.N[channel], 1))
-
-    G = np.array([np.real(seis.Gk[channel]) for k in xrange(seis.N[channel])])
-    H = np.array([seis.Hk[channel] for k in xrange(seis.N[channel])])
-    g = np.array([np.zeros(seis.r[channel]) for k in xrange(seis.N[channel])])
-    h = np.array([[channel] for k in xrange(seis.N[channel])])
-    qinv = np.array([seis.qInvk[channel] for k in xrange(seis.N[channel])])
-    rinv = np.array([seis.rInvk[channel] for k in xrange(seis.N[channel])])
-
-    x = l2_affine(z, g, h, G, H, qinv, rinv)
-    f = back_solve(seis, channel, x)
-    f = np.reshape(f, (len(f)))
-    
-    return x, f
-
-
-def EM(seis, channel, maxIter = 5):
-    for k in xrange(maxIter):
-        x, f = smooth_seis(seis, channel)
-        seis.sigF[channel] = np.var(f)
-        seis.sigR[channel] = np.var(x[:,0])
-        seis.rInvk[channel] = np.reshape(1/seis.sigR[channel],(1,1))
-        seis.qInvk[channel] = np.linalg.inv(np.cov(x.T))
-    
-    return x, f
-    
-def summary_plot(seis, channel):
-    y, f = smooth_seis(seis, channel)
-    
-    ar,ma,k,ar0 = seis.ARMA[channel]
-    
-    heur = [20,.005]
-    
-    fig,ax=plt.subplots(2,1,sharex=True)
-    ax[0].set_title(seis.channels[channel])
-    ax[0].plot(np.arange(len(f)),seis.zs[channel],label='observed')
-    ax[0].plot(np.arange(len(f)),np.real(y[:,0]*heur[0]),label='Kalman')
-    ax[1].plot(np.arange(len(f)),seis.fs[channel],label='z-transf')
-    ax[1].plot(np.arange(len(f)),-np.real(f*ar0/k*heur[1]),label='Kalman')
-    ax[1].set_ylim([-5e-5,5e-5])
-    ax[0].set_ylabel('seismometer output [counts]')
-    ax[1].set_xlabel('time [s]')
-    ax[1].set_ylabel(r'accel. [$m/s^2$]')
-    ax[0].legend()
-    ax[1].legend()
-    
-    return y,f
-
-if __name__ == "__main__":
-    t1 = seism.dt.datetime(2017, 05, 19, 12, 22)
-    t2 = t1 - seism.dt.timedelta(seconds=1000)
-    seis = seism.SeismicReader(t1, t2)
-
-    # get the plots from seis.
-    y0,f0 = summary_plot(seis, 0)
-    y1,f1 = summary_plot(seis, 1)
-    y2,f2 = summary_plot(seis, 2)
-
-    #print(D)
-
-    #print(sD)
-    # y = l2_affine(z, g, h, G, H, qinv, rinv)

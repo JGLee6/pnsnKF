@@ -81,8 +81,8 @@ class SeismicReader(object):
             self.Hk.append(Hk)
             self.Gk.append(Gk)
             self.Sk.append(Sk)
-            self.sigW.append(1)
-            self.sigF.append(1)
+            self.sigW.append(1e8)
+            self.sigF.append(1e-3)
             self.sigR.append(1)
             qinv,rinv = self.covar_matrices(k,self.sigF[k],self.sigW[k],self.sigR[k])
             self.qInvk.append(qinv)
@@ -133,7 +133,7 @@ class SeismicReader(object):
         # Scale input's coefficients (zeros) by gain (conversion factor)
         ARp0 = ARp[0]
         ARp /= -ARp[0]
-        MAq = -MAq/ARp[0]
+        MAq = -MAq*K/ARp[0]
         # We also treat AR coefficients (aside from leading) to be the negative
         ARp[1:] *= -1
         
