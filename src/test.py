@@ -6,13 +6,14 @@ import ckbs_l1 as ksl1
 import matplotlib.pyplot as plt
 
 
-def back_solve(seismicReader, indx, x):
-    """    
+def back_solve(seismicReader, channel, x):
     """
-    r = seismicReader.r[indx]
-    q = seismicReader.q[indx]
-    p = seismicReader.p[indx]
-    phis, thetas, K, phi0 = seismicReader.ARMA[indx]
+    given seis, channel, and the solution x, reconstruct the ground motion f
+    """
+    r = seismicReader.r[channel]
+    q = seismicReader.q[channel]
+    p = seismicReader.p[channel]
+    phis, thetas, K, phi0 = seismicReader.ARMA[channel]
     N, n = np.shape(x)
     f = np.zeros([N, 1], dtype=np.complex_)
     if (r == q + 1) and (r != p):
@@ -33,24 +34,9 @@ def back_solve(seismicReader, indx, x):
     return f
 
 
-def gen_inputs(seis, channel):
-    # Start defining matrices for the time series of size N
-    zAve = np.average(seis.zs[channel])
-    z = np.reshape(seis.zs[channel] - zAve, (seis.N[channel], 1))
-
-    G = np.array([np.real(seis.Gk[channel]) for k in xrange(seis.N[channel])])
-    H = np.array([seis.Hk[channel] for k in xrange(seis.N[channel])])
-    g = np.array([np.zeros(seis.r[channel]) for k in xrange(seis.N[channel])])
-    h = np.array([[channel] for k in xrange(seis.N[channel])])
-    qinv = np.array([seis.qInvk[channel] for k in xrange(seis.N[channel])])
-    rinv = np.array([seis.rInvk[channel] for k in xrange(seis.N[channel])])
-
-    return z, g, h, G, H, qinv, rinv, zAve
-
-
 def smooth_seis(seis, channel, l1=True):
     # Start defining matrices for the time series of size N
-    z, g, h, G, H, qinv, rinv, zAve = gen_inputs(seis, channel)
+    z, g, h, G, H, qinv, rinv, zAve = seis.gen_inputs(channel)
 
     if l1:
         x, r, s, pPos, pNeg, info = ksl1.l1_affine(z, g, h, G, H, qinv, rinv)
@@ -88,25 +74,24 @@ def EM_l1(seis, channel, maxIter=5):
 
 
 def summary_plot(seis, channel):
-    z, g, h, G, H, qinv, rinv, zAve = gen_inputs(seis, 0)
-    y1, f1, zAve1, info1 = smooth_seis(seis, channel)
-    y2, f2, zAve2, info2 = smooth_seis(seis, channel, False)
+    z, g, h, G, H, qinv, rinv, zAve = seis.gen_inputs(0)
+    # y1, f1, zAve1, info1 = smooth_seis(seis, channel)
+    y2, f2, zAve2, info2 = smooth_seis(seis, channel, l1=False)
 
     ar, ma, k, ar0 = seis.ARMA[channel]
-
-    z1 = np.array([np.dot(H[i], y1[i]) for i in xrange(len(H))])
+    # z1 = np.array([np.dot(H[i], y1[i]) for i in xrange(len(H))])
     z2 = np.array([np.dot(H[i], y2[i]) for i in xrange(len(H))])
 
     # heur = [17.,1]
 
     fig, ax = plt.subplots(2, 1, sharex=True)
     ax[0].set_title(seis.channels[channel])
-    ax[0].plot(np.arange(len(f1)), seis.zs[channel], label='observed')
-    ax[0].plot(np.arange(len(f1)), np.real((z1 * k / ar0) + zAve), label='Kalman-l1', alpha=.5)
-    ax[0].plot(np.arange(len(f1)), np.real((z2) + zAve), label='Kalman-l2', alpha=.5)
-    ax[1].plot(np.arange(len(f1)), seis.fs[channel], label='z-transf')
-    ax[1].plot(np.arange(len(f1)), -np.real(f1 * ar0), label='Kalman-l1', alpha=.5)
-    ax[1].plot(np.arange(len(f1)), -np.real(f2 * ar0), label='Kalman-l2', alpha=.5)
+    ax[0].plot(np.arange(len(f2)), seis.zs[channel], label='observed')
+    # ax[0].plot(np.arange(len(f1)), np.real((z1 * k / ar0) + zAve), label='Kalman-l1', alpha=.5)
+    ax[0].plot(np.arange(len(f2)), np.real((z2) + zAve), label='Kalman-l2', alpha=.5)
+    ax[1].plot(np.arange(len(f2)), seis.fs[channel], label='z-transf')
+    # ax[1].plot(np.arange(len(f1)), -np.real(f1 * ar0), label='Kalman-l1', alpha=.5)
+    ax[1].plot(np.arange(len(f2)), -np.real(f2 * ar0), label='Kalman-l2', alpha=.5)
     ax[1].set_ylim([-5e-5, 5e-5])
     ax[0].set_ylabel('seismometer output [counts]')
     ax[1].set_xlabel('time [s]')
@@ -114,8 +99,10 @@ def summary_plot(seis, channel):
     ax[0].legend()
     ax[1].legend()
 
-    return y1, y2, f1, f2, info1, info2
+    fig.savefig("asdf.png")
 
+    # return y1, y2, f1, f2, info1, info2
+    return y2, f2, info2
 
 if __name__ == "__main__":
     t1 = seism.dt.datetime(2017, 05, 19, 12, 22)
@@ -123,4 +110,5 @@ if __name__ == "__main__":
     seis = seism.SeismicReader(t1, t2)
 
     # Start defining matrices for each time
-    x1, x2, f1, f2, info1, info2 = summary_plot(seis, 0)
+    # x1, x2, f1, f2, info1, info2 = summary_plot(seis, 0)
+    x2, f2, info2 = summary_plot(seis, 0)

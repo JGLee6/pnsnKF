@@ -209,6 +209,20 @@ class SeismicReader(object):
         #     fig, ax = plt.subplots(1,1);ax.plot(np.arange(len(waveForms[0]))*.01,waveForms[0],label='seismometer');ax.plot(np.arange(len(waveForms[0]))*.01,sm[0],c='r',alpha=.5,label='smoothed')
         #     ax.set_title('.'.join(item[:4]))
 
+    def gen_inputs(self, channel):
+        # Start defining matrices for the time series of size N
+        zAve = np.average(self.zs[channel])
+        z = np.reshape(self.zs[channel] - zAve, (self.N[channel], 1))
+
+        G = np.array([self.Gk[channel] for _ in xrange(self.N[channel])])
+        H = np.array([self.Hk[channel] for _ in xrange(self.N[channel])])
+        g = np.array([np.zeros(self.r[channel]) for _ in xrange(self.N[channel])])
+        h = np.array([[0] for _ in xrange(self.N[channel])])
+        qinv = np.array([self.qInvk[channel] for _ in xrange(self.N[channel])])
+        rinv = np.array([self.rInvk[channel] for _ in xrange(self.N[channel])])
+
+        return z, g, h, G, H, qinv, rinv, zAve
+
 
 if __name__ == "__main__":
     # t1 = dt.datetime.now()

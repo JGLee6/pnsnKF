@@ -1,9 +1,9 @@
 import numpy as np
 import scipy.linalg as la
 import pykalman as pyk
-#from src import seismic as seism
 import seismic as seism
 import matplotlib.pyplot as plt
+
 
 def l2_affine(z, g, h, G, H, qinv, rinv):
     """
@@ -95,7 +95,7 @@ def l2_tridiag_hidden(G, Qinv):
     # This commented portion is maybe physically motivated for a process
     # that continues with the same covariance and transition matrices, but is 
     # not the optimal solution for the problem
-    D[-1] = Qinv[-1] # + np.dot(G[-1].T,np.dot(Qinv[-1],G[-1]))
+    D[-1] = Qinv[-1]  # + np.dot(G[-1].T,np.dot(Qinv[-1],G[-1]))
     for k in xrange(N - 1):
         D[k] = Qinv[k - 1] + np.dot(G[k].conj().T, np.dot(Qinv[k], G[k]))
 
@@ -220,3 +220,17 @@ def test_l2l2():
     # It seems to not nail the first and last points to the same precision...
     print 'Comparing results...'
     assert all(np.abs(y - y2[0])[1:] < 1e-5)
+
+
+def check_optimality(diag, subDiag, rhs, x):
+    """
+    test whether Ax=rhs, where A is tridiagonal with supdiagonal = subdiag transpose
+    """
+    N, n = np.shape(diag)[:-1]
+    resid = np.zeros((N, n), dtype=np.complex_)
+    resid[0, :] = np.dot(diag[0, :, :], x[0, :]) + np.dot(subDiag[0, :, :].conj().T, x[1, :]) - rhs[0, :]
+    for i in range(1, n - 1):
+        resid[i, :] = np.dot(subDiag[i - 1, :, :], x[i - 1, :]) + np.dot(diag[i, :, :], x[i, :]) + \
+                      np.dot(subDiag[i - 1].conj().T, x[i + 1, :]) - rhs[i, :]
+    resid[-1, :] = np.dot(subDiag[-1, :, :], x[-2, :]) + np.dot(diag[-1, :, :], x[-1, :]) - rhs[-1, :]
+    return resid
