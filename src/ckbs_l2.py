@@ -173,8 +173,6 @@ def tridiag_solve_b(C, A, r):
     for k in xrange(N - 2, -1, -1):
         #  e[k] = la.solve(D[k], (s[k] - np.dot(A[k - 1], e[k])))
         e[k] = la.solve(D[k], (s[k] - np.dot(A[k], e[k + 1])))  # Need to mentally check whether A[k] is right?
-        if k == 0:
-            print(e[0])
 
     return e
 

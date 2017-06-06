@@ -43,7 +43,7 @@ def smooth_seis(seis, channel, l1=True):
     else:
         diag, subDiag, rhs = ksl2.l2_affine(z, g, h, G, H, qinv, rinv)
         x = ksl2.tridiag_solve_b(diag, subDiag, rhs)
-        # x = ksl2.l2_affine(z, g, h, G, H, qinv, rinv)
+        print("Norm of residual is {}".format(np.linalg.norm(ksl2.check_optimality(diag, subDiag, rhs, x))))
         info = None
     f = back_solve(seis, channel, x)
     f = np.reshape(f, (len(f)))
@@ -75,12 +75,12 @@ def EM_l1(seis, channel, maxIter=5):
 
 def summary_plot(seis, channel):
     z, g, h, G, H, qinv, rinv, zAve = seis.gen_inputs(0)
-    # y1, f1, zAve1, info1 = smooth_seis(seis, channel)
-    y2, f2, zAve2, info2 = smooth_seis(seis, channel, l1=False)
+    # x1, f1, zAve1, info1 = smooth_seis(seis, channel)
+    x2, f2, zAve2, info2 = smooth_seis(seis, channel, l1=False)
 
     ar, ma, k, ar0 = seis.ARMA[channel]
     # z1 = np.array([np.dot(H[i], y1[i]) for i in xrange(len(H))])
-    z2 = np.array([np.dot(H[i], y2[i]) for i in xrange(len(H))])
+    z2 = np.array([np.dot(H[i], x2[i]) for i in xrange(len(H))])
 
     # heur = [17.,1]
 
@@ -88,10 +88,11 @@ def summary_plot(seis, channel):
     ax[0].set_title(seis.channels[channel])
     ax[0].plot(np.arange(len(f2)), seis.zs[channel], label='observed')
     # ax[0].plot(np.arange(len(f1)), np.real((z1 * k / ar0) + zAve), label='Kalman-l1', alpha=.5)
-    ax[0].plot(np.arange(len(f2)), np.real((z2) + zAve), label='Kalman-l2', alpha=.5)
+    ax[0].plot(np.arange(len(f2)), np.real(z2), label='Kalman-l2', alpha=.5)
+    # ax[0].plot(np.arange(len(f2)), np.real((z2) + zAve), label='Kalman-l2', alpha=.5)
     ax[1].plot(np.arange(len(f2)), seis.fs[channel], label='z-transf')
     # ax[1].plot(np.arange(len(f1)), -np.real(f1 * ar0), label='Kalman-l1', alpha=.5)
-    ax[1].plot(np.arange(len(f2)), -np.real(f2 * ar0), label='Kalman-l2', alpha=.5)
+    ax[1].plot(np.arange(len(f2)), -1e5 * np.real(f2), label='Kalman-l2', alpha=.5)
     ax[1].set_ylim([-5e-5, 5e-5])
     ax[0].set_ylabel('seismometer output [counts]')
     ax[1].set_xlabel('time [s]')
@@ -102,7 +103,7 @@ def summary_plot(seis, channel):
     fig.savefig("asdf.png")
 
     # return y1, y2, f1, f2, info1, info2
-    return y2, f2, info2
+    return x2, f2, info2
 
 if __name__ == "__main__":
     t1 = seism.dt.datetime(2017, 05, 19, 12, 22)
