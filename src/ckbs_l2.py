@@ -119,7 +119,7 @@ def l2_grad_observed(z, h, H, Rinv):
     grad = np.zeros([N, n])
     for k in xrange(N):
         grad[k] = np.dot(H[k].conj().T, np.dot(Rinv[k], z[k] - h[k]))  # Hk is real? This is a bug if h[k] is non-zero?
-        np.testing.assert_array_equal(H[k].conj(), H[k])  # does not fail
+        # np.testing.assert_array_equal(H[k].conj(), H[k])  # does not fail
 
     return grad
 
@@ -233,6 +233,6 @@ def check_optimality(diag, subDiag, rhs, x):
     resid[0, :] = np.dot(diag[0, :, :], x[0, :]) + np.dot(subDiag[0, :, :].conj().T, x[1, :]) - rhs[0, :]
     for i in range(1, n - 1):
         resid[i, :] = np.dot(subDiag[i - 1, :, :], x[i - 1, :]) + np.dot(diag[i, :, :], x[i, :]) + \
-                      np.dot(subDiag[i - 1].conj().T, x[i + 1, :]) - rhs[i, :]
+                      np.dot(subDiag[i].conj().T, x[i + 1, :]) - rhs[i, :]
     resid[-1, :] = np.dot(subDiag[-1, :, :], x[-2, :]) + np.dot(diag[-1, :, :], x[-1, :]) - rhs[-1, :]
     return resid

@@ -10,8 +10,6 @@ import re
 import numpy.polynomial.polynomial as poly
 
 
-# plt.interactive(False)
-
 class SeismicReader(object):
     """
     Seismic Reader takes in time points and creates an object with seismic response data in the form
@@ -43,7 +41,7 @@ class SeismicReader(object):
             item.append(t1)
 
         self.zs = []  # array of z's in K* m/s^2 (counts)
-        self.fs = []  #  their estimate of outputs
+        self.fs = []  # their estimate of outputs
         self.ARMA = []  # array of AR coeff, MA coeff, and gain K
         self.r = []
         self.p = []
@@ -81,7 +79,7 @@ class SeismicReader(object):
             self.Hk.append(Hk)
             self.Gk.append(Gk)
             self.Sk.append(Sk)
-            self.sigW.append(1e8)
+            self.sigW.append(1e8)  # 1e8??
             self.sigF.append(1e-3)
             self.sigR.append(1)
             qinv,rinv = self.covar_matrices(k,self.sigF[k],self.sigW[k],self.sigR[k])
@@ -132,7 +130,7 @@ class SeismicReader(object):
         # Divide by leading coefficient of AR process
         # Scale input's coefficients (zeros) by gain (conversion factor)
         ARp0 = ARp[0]
-        ARp /= -ARp[0]
+        ARp /= ARp[0]  # why is this a negative, removed
         MAq = -MAq*K/ARp[0]
         # We also treat AR coefficients (aside from leading) to be the negative
         ARp[1:] *= -1
@@ -213,6 +211,7 @@ class SeismicReader(object):
         # Start defining matrices for the time series of size N
         zAve = np.average(self.zs[channel])
         z = np.reshape(self.zs[channel] - zAve, (self.N[channel], 1))
+        # z = np.reshape(self.zs[channel], (self.N[channel], 1))
 
         G = np.array([self.Gk[channel] for _ in xrange(self.N[channel])])
         H = np.array([self.Hk[channel] for _ in xrange(self.N[channel])])
